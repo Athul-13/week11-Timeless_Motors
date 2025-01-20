@@ -2,6 +2,8 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import PrivateRoute from "./components/PrivateRoute";
 import About from "./pages/About";
 import AddListingForm from "./pages/AddListingForm";
+import AddCategory from "./pages/Admin/AddCategory";
+import AdminAddListing from "./pages/Admin/AdminAddListing";
 import AuctionManagement from "./pages/Admin/AuctionManagement";
 import BannerManagement from "./pages/Admin/BannerManagement";
 import Categories from "./pages/Admin/Categories";
@@ -23,7 +25,7 @@ import ProfileDetails from "./pages/ProfileDetails";
 import SignupForm from "./pages/SignupForm";
 import UserDetails from "./pages/UserDetails";
 import VerifyOTP from "./pages/VerifyOTP";
-import AdminAddListing from "./pages/Admin/AdminAddListing";
+import ListingDetail from "./pages/ListingDetail";
 
 
 export default function App () {
@@ -52,11 +54,12 @@ export default function App () {
           </PrivateRoute>     
         } />
 
-        <Route path="/listings" element={
-          <PrivateRoute>
-            < Listings />
-          </PrivateRoute> 
+        <Route path="/listings" element={         
+          < Listings /> 
         } />
+        <Route path="/listing/:id" element={
+          <ListingDetail />} 
+        />
 
         <Route path="/addlisting" element={
           <PrivateRoute>
@@ -85,6 +88,7 @@ export default function App () {
             <Route path="banners" element={<BannerManagement />} />
             <Route path="orders" element={<Orders />} />
             <Route path="categories" element={<Categories />} />
+            <Route path="/admin/categories/new-SubCategory" element={< AddCategory />} />
             <Route path="support" element={<Support />} />
         </Route>
 

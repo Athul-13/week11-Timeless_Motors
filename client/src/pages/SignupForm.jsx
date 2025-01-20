@@ -3,6 +3,10 @@ import { Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { authService } from "../utils/api";
 import toast, { Toaster } from 'react-hot-toast';
+import { GoogleLogin } from '@react-oauth/google';
+import { useDispatch } from "react-redux";
+import { setCredentials } from "../redux/authSlice";
+
 
 const SignupForm = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -16,6 +20,7 @@ const SignupForm = () => {
   });
 
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
@@ -65,6 +70,41 @@ const SignupForm = () => {
       console.error('signup error:', error)
       toast.error(error.response?.data?.message || 'Failed to send OTP')
     }
+  };
+
+// google signup
+  const GoogleSignUp = () => {
+    
+    const handleGoogleSuccess = async (credentialResponse) => {
+      try {
+        console.log('Google response:', credentialResponse); 
+        const response = await authService.googleAuth(credentialResponse.credential);
+        if (response.success) {
+          dispatch(setCredentials({
+              token: response.token,
+              user: response.user
+          }));
+          navigate('/homePage');
+      }
+      } catch (error) {
+        toast.error('Google sign in failed');
+        console.error('Google sign in error:', error);
+      }
+    };
+
+    return (
+      <GoogleLogin
+        onSuccess={handleGoogleSuccess}
+        onError={() => {
+          toast.error('Google sign in failed');
+        }}
+        useOneTap
+        theme="outline"
+        shape="rectangular"
+        text="signup_with"
+        className="w-full flex items-center justify-center px-4 py-2 bg-white border border-gray-300 rounded-md shadow-md hover:bg-gray-50 active:bg-gray-200 transition-all"
+      />
+    );
   };
 
   return (
@@ -235,12 +275,7 @@ const SignupForm = () => {
 
         {/* Google Sign-Up Button */}
         <button className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 transition-colors">
-          <img
-            src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg"
-            alt="Google Logo"
-            className="w-5 h-5 mr-2"
-          />
-          <span>Sign Up with Google</span>
+          <GoogleSignUp />
         </button>
       </div>
     </div>

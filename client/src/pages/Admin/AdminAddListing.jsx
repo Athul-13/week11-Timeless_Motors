@@ -1,21 +1,47 @@
 import { Plus, X } from "lucide-react";
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from "react-router-dom";
-import { addImages, updateFormField e} from "../../redux/listingSlice";
+import { addImages, removeImage, resetForm, updateFormField } from '../../redux/listingSlice';
 import { listingService } from "../../utils/api";
+import { useEffect, useMemo } from "react";
+import { fetchCategories } from "../../redux/categorySlice";
 
 const AdminAddListing = () => {
   const dispatch = useDispatch();
-  const formData = useSelector((state)=> state.listing.formData)
-
+  const formData = useSelector((state)=> state.listing.formData);
+  const categories = useSelector((state)=> state.categories.categories);
   const navigate = useNavigate();
 
   const CLOUD_NAME = 'dncoxucat';
-  const UPLOAD_PRESET = 'listing_images'
+  const UPLOAD_PRESET = 'listing_images';
+
+  useEffect(()=>{
+    dispatch(fetchCategories());
+  },[dispatch]);
+
+  const categorizedOptiions = useMemo(()=>{
+    const makeCategory = categories.find(cat=> cat.name.toLowerCase() === 'make');
+    const transmissionCategory = categories.find(cat => cat.name.toLowerCase() === 'transmission');
+    const fuelCategory = categories.find(cat => cat.name.toLowerCase() === 'fuel type');
+    const listingCategory = categories.find(cat => cat.name.toLowerCase() === 'listing type');
+
+    return {
+      makes: makeCategory?.subCategories || [],
+      transmissions: transmissionCategory?.subCategories || [],
+      fuels: fuelCategory?.subCategories || [],
+      listingTypes: listingCategory?.subCategories || []
+    };
+  },[categories]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    dispatch(updateFormField({name, value}))
+    if (e.target.tagName === 'SELECT') {
+      const selectedOption = e.target.options[e.target.selectedIndex];
+      const actualValue = selectedOption.getAttribute('data-name') || value;
+      dispatch(updateFormField({ name, value: actualValue }));
+    } else {
+      dispatch(updateFormField({ name, value }));
+    }
   };
 
   const uploadToCloudinary = async (file) => {
@@ -66,7 +92,7 @@ const AdminAddListing = () => {
     }
   };
 
-  const removeImage = (index) => {
+  const deleteImage = (index) => {
     dispatch(removeImage(index))
   }
 
@@ -109,15 +135,21 @@ const AdminAddListing = () => {
           {/* Left Column */}
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium">Make*</label>
-              <input
-                type="text"
+            <label className="block text-sm font-medium">Make*</label>
+              <select
                 name="make"
                 value={formData.make}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-400 rounded"
                 required
-              />
+              >
+                <option value="">Select Make</option>
+                {categorizedOptiions.makes.map((make) => (
+                <option key={make._id} value={make.name} data-name={make.name}>
+                  {make.name}
+                </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium">Model*</label>
@@ -196,8 +228,11 @@ const AdminAddListing = () => {
                 required
               >
                 <option value="">Select Transmission</option>
-                <option value="Automatic">Automatic</option>
-                <option value="Manual">Manual</option>
+                {categorizedOptiions.transmissions.map((transmission) => (
+                <option key={transmission._id} value={transmission.name} data-name={transmission.name}>
+                  {transmission.name}
+                </option>
+                ))}
               </select>
             </div>
             <div>
@@ -210,8 +245,11 @@ const AdminAddListing = () => {
                 required
               >
                 <option value="">Select Fuel Type</option>
-                <option value="Petrol">Petrol</option>
-                <option value="Diesel">Diesel</option>
+                {categorizedOptiions.fuels.map((fuel) => (
+                <option key={fuel._id} value={fuel.name} data-name={fuel.name}>
+                  {fuel.name}
+                </option>
+                ))}
               </select>
             </div>
             <div>
@@ -223,8 +261,12 @@ const AdminAddListing = () => {
                 className="w-full px-3 py-2 border border-gray-400 rounded"
                 required
               >
-                <option value="Auction">Auction</option>
-                <option value="Fixed price">Fixed Price</option>
+                <option value="">Select listing type</option>
+                {categorizedOptiions.listingTypes.map((listing) => (
+                <option key={listing._id} value={listing.name} data-name={listing.name}>
+                  {listing.name}
+                </option>
+              ))}
               </select>
             </div>
             <div>
@@ -305,7 +347,7 @@ const AdminAddListing = () => {
                 />
                 <button
                   type="button"
-                  onClick={() => removeImage(index)}
+                  onClick={() => deleteImage(index)}
                   className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
                 >
                   <X size={16} />

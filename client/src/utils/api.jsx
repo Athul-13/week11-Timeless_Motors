@@ -35,7 +35,7 @@ export const authService = {
         // Set cookie with optional configuration
         Cookies.set('token', response.data.accessToken, {
             expires: 7, // expires in 7 days
-            secure: false,
+            secure: import.meta.env.MODE === 'production',
             sameSite: 'strict', // protect against CSRF
             path: '/' // accessible across all pages
         });
@@ -75,8 +75,32 @@ export const authService = {
             throw err;
         }
     },
-    logout: () => {
+    logout: async () => {
+        const response = await api.post('/logout');
         Cookies.remove('token', { path: '/' });
+        return response.data;
+    },
+    googleAuth: async (credential) => {
+        try {
+          const response = await api.post('/auth/google', {credential: credential} );
+
+          if (response.data.accessToken) {
+            Cookies.set('token', response.data.accessToken, {
+                expires: 7,
+                secure: import.meta.env.MODE === 'production',
+                sameSite: 'strict',
+                path: '/'
+            });
+        }
+        return {
+            success: true,
+            token: response.data.accessToken,
+            user: response.data.user  // Make sure your backend sends user data
+        };
+        } catch (error) {
+            console.error("Google authentication failed:", error);
+            throw error;
+        }
     }
 };
 
@@ -91,7 +115,58 @@ export const listingService = {
         }
     },
     getAllListings: async () => {
-        const response = await api.get('/auth/listings');
+        try {
+            const response = await api.get('/auth/listings');
+            return response.data;
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }        
+    },
+    getListingById: async (id) => {
+        const response = await api.get(`/auth/listings/${id}`);
+        return response.data;
+    }
+};
+
+export const categoryService = {
+    getAllCategories: async () => {
+        const response = await api.get('/auth/categories');
+        return response.data;
+    },
+    
+    createCategory: async (categoryData) => {
+        const response = await api.post('/auth/categories', categoryData);
+        return response.data;
+    },
+    
+    updateCategory: async (id, categoryData) => {
+        const response = await api.put(`/auth/categories/${id}`, categoryData);
+        return response.data;
+    },
+    
+    deleteCategory: async (id) => {
+        const response = await api.delete(`/auth/categories/${id}`);
+        return response.data;
+    },
+    
+    addSubcategory: async (categoryId, subcategoryData) => {
+        const response = await api.post(`/auth/categories/${categoryId}/subcategories`, subcategoryData);
+        return response.data;
+    },
+    
+    updateSubcategory: async (categoryId, subcategoryId, status) => {
+        const response = await api.put(
+            `/auth/categories/${categoryId}/subcategories/${subcategoryId}`,
+            status
+        );
+        return response.data;
+    },
+    
+    deleteSubcategory: async (categoryId, subcategoryId) => {
+        const response = await api.delete(
+            `/auth/categories/${categoryId}/subcategories/${subcategoryId}`
+        );
         return response.data;
     }
 };
@@ -105,8 +180,8 @@ export const adminServices = {
         const response = await api.get(`/auth/users/${id}`);
         return response.data;
     },
-    updateUser: async (id, userData) => {
-        const response = await api.put(`/auth/users/${id}/edit`, userData);
+    updateUserStatus: async (id, status) => {
+        const response = await api.patch(`/auth/users/${id}/status`, {status});
         return response.data;
     },
     deleteUser: async (id) => {
@@ -117,10 +192,6 @@ export const adminServices = {
         const response = await api.get(`/auth/users/search?q=${query}`);
         return response.data;
     },
-    createUser: async (userData) => {
-        const response = await api.post('/auth/signup', userData); 
-        return response.data; 
-    }
-};
+}
 
 export default api;

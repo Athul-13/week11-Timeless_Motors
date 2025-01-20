@@ -14,9 +14,9 @@ const Navbar = () => {
     setIsOpen(!isOpen);
   };
 
-  const handleLogout = () => {
-    dispatch(logout())
-    navigate("/homePage")
+  const handleLogout = async () => {
+    await dispatch(logout())
+    navigate("/")
   }
 
   return (

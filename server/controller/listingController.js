@@ -90,3 +90,37 @@ exports.getAllListings = async (req, res) => {
         res.status(500).json({message: err.message});
     }
 }
+
+exports.getListingById = async (req, res) => {
+    try {
+        const { id } = req.params;
+    
+        const listing = await Listing.findById(id);
+    
+        if (!listing) {
+          return res.status(404).json({
+            success: false,
+            message: 'Listing not found'
+          });
+        }
+    
+        return res.status(200).json({
+          success: true,
+          data: listing
+        });
+    
+      } catch (error) {
+        if (error.name === 'CastError') {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid listing ID format'
+          });
+        }
+    
+        console.error('Error in getListingById:', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Internal server error'
+        });
+      }
+};

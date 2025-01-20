@@ -4,6 +4,7 @@ import PropTypes from 'prop-types';
 
 const PrivateRoute = ({children}) => {
     const {isAuthenticated, token} = useSelector((state) => state.auth);
+    console.log('private:', token)
     const location = useLocation();
 
     console.log('PrivateRoute state:', { 
