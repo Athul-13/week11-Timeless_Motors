@@ -1,39 +1,43 @@
-import { Plus, X } from "lucide-react";
+import { Plus, X, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from "react-router-dom";
-import Footer from "../components/Footer";
-import Navbar from "../components/Navbar";
-import { addImages, removeImage, resetForm, updateFormField } from '../redux/listingSlice';
-import { listingService } from "../utils/api";
-import { useEffect, useMemo } from "react";
-import { fetchCategories } from "../redux/categorySlice";
+import toast, { Toaster } from 'react-hot-toast';
+import Footer from "../../components/Footer";
+import Navbar from "../../components/Navbar";
+import { addImages, removeImage, resetForm, updateFormField } from '../../redux/listingSlice';
+import { listingService } from "../../utils/api";
+import { useEffect, useMemo, useState } from "react";
+import { fetchCategories } from "../../redux/categorySlice";
 
 const AddListingForm = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const formData = useSelector((state)=> state.listing.formData)
-  const categories = useSelector((state)=> state.categories.categories);
+  const formData = useSelector((state) => state.listing.formData);
+  const categories = useSelector((state) => state.categories.categories);
+  const [editingImage, setEditingImage] = useState(null);
 
   const CLOUD_NAME = 'dncoxucat';
   const UPLOAD_PRESET = 'listing_images';
 
-    useEffect(()=>{
-      dispatch(fetchCategories());
-    },[dispatch]);
-  
-    const categorizedOptiions = useMemo(()=>{
-      const makeCategory = categories.find(cat=> cat.name.toLowerCase() === 'make');
-      const transmissionCategory = categories.find(cat => cat.name.toLowerCase() === 'transmission');
-      const fuelCategory = categories.find(cat => cat.name.toLowerCase() === 'fuel type');
-      const listingCategory = categories.find(cat => cat.name.toLowerCase() === 'listing type');
-  
-      return {
-        makes: makeCategory?.subCategories || [],
-        transmissions: transmissionCategory?.subCategories || [],
-        fuels: fuelCategory?.subCategories || [],
-        listingTypes: listingCategory?.subCategories || []
-      };
-    },[categories]);
+  useEffect(() => {
+    dispatch(fetchCategories());
+  }, [dispatch]);
+
+  const categorizedOptiions = useMemo(()=>{
+    const makeCategory = categories.find(cat=> cat.name.toLowerCase() === 'make');
+    const transmissionCategory = categories.find(cat => cat.name.toLowerCase() === 'transmission');
+    const fuelCategory = categories.find(cat => cat.name.toLowerCase() === 'fuel type');
+    const listingCategory = categories.find(cat => cat.name.toLowerCase() === 'listing type');
+
+    return {
+      makes: makeCategory?.subCategories || [],
+      transmissions: transmissionCategory?.subCategories || [],
+      fuels: fuelCategory?.subCategories || [],
+      listingTypes: listingCategory?.subCategories || []
+    };
+  },[categories]);
+
+  const isAuction = formData.type?.toLowerCase() === 'auction';
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -50,6 +54,10 @@ const AddListingForm = () => {
     const formData = new FormData();
     formData.append('file',file);
     formData.append('upload_preset',UPLOAD_PRESET);
+
+    for (let pair of formData.entries()) {
+      console.log(pair[0] + ': ' + pair[1]);
+  }
 
     try{
       const response = await fetch(
@@ -77,26 +85,47 @@ const AddListingForm = () => {
 
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
+    const toastId = toast.loading(<div className="flex items-center gap-2"><Upload className="animate-bounce" size={18} /><span>Uploading images...</span></div>);
+    let successCount = 0;
+    let failCount = 0;
 
     for (const file of files) {
       if (!file.type.startsWith('image/')) {
-        console.error('Invalid file type:', file.type);
+        failCount++;
         continue;
       }
 
       try {
         const imageData = await uploadToCloudinary(file);
         dispatch(addImages([imageData]));
+        successCount++;
       } catch (error) {
         console.error('Error processing image:', error);
-        alert(`Failed to upload image ${file.name}`);
-      }   
+        failCount++;
+      }
+    }
+
+    toast.dismiss(toastId);
+
+    if (successCount > 0) {
+      toast.success(<div className="flex items-center gap-2"><CheckCircle2 size={18} /><span>{`Successfully uploaded ${successCount} ${successCount === 1 ? 'image' : 'images'}`}</span></div>);
+    }
+
+    if (failCount > 0) {
+      toast.error(<div className="flex items-center gap-2"><AlertCircle size={18} /><span>{`Failed to upload ${failCount} ${failCount === 1 ? 'image' : 'images'}`}</span></div>);
     }
   };
 
+
   const deleteImage = (index) => {
-    dispatch(removeImage(index))
-  }
+    dispatch(removeImage(index));
+    toast(
+      <div className="flex items-center gap-2">
+        <CheckCircle2 size={18} />
+        <span>Image removed</span>
+      </div>
+    );
+  };
 
   const handleDiscard = () => {
     navigate('/listings');
@@ -106,9 +135,21 @@ const AddListingForm = () => {
     e.preventDefault();
 
     if (formData.images.length < 3) {
-      alert('Please add at least 3 images');
+      toast.error(
+        <div className="flex items-center gap-2">
+          <AlertCircle size={18} />
+          <span>Please add at least 3 images</span>
+        </div>
+      );
       return;
     }
+
+    const toastId = toast.loading(
+      <div className="flex items-center gap-2">
+        <Upload className="animate-bounce" size={18} />
+        <span>Creating listing...</span>
+      </div>
+    );
 
     try {
       const transformedData = {
@@ -120,16 +161,29 @@ const AddListingForm = () => {
       };
 
       const response = await listingService.addListing(transformedData);
-      console.log('Listing created successfully:', response);
+      toast.dismiss(toastId);
+      toast.success(
+        <div className="flex items-center gap-2">
+          <CheckCircle2 size={18} />
+          <span>Listing created successfully!</span>
+        </div>
+      );
       dispatch(resetForm());
+      navigate('/listings');
     } catch (err) {
-      console.error('Error submitting form:', err);
-      alert('Failed to create listing: ' + err.message);
+      toast.dismiss(toastId);
+      toast.error(
+        <div className="flex items-center gap-2">
+          <AlertCircle size={18} />
+          <span>{err.message || 'Failed to create listing'}</span>
+        </div>
+      );
     }
-  }
+  };
 
   return (
     <>
+      <Toaster position="top-center" />
       <Navbar />
       <form onSubmit={handleSubmit} className="max-w-6xl mx-auto my-10 p-6 bg-gray-300">
         <h1 className="text-xl font-bold mb-4">Add some basic details</h1>
@@ -268,11 +322,13 @@ const AddListingForm = () => {
                 <option key={listing._id} value={listing.name} data-name={listing.name}>
                   {listing.name}
                 </option>
-              ))}
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium">Starting Bid/Price*</label>
+              <label className="block text-sm font-medium">
+                {isAuction ? 'Starting Bid' : 'Price'}*
+              </label>
               <input
                 type="number"
                 name="starting_bid"
@@ -283,18 +339,20 @@ const AddListingForm = () => {
                 min="0"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium">Minimum Increment*</label>
-              <input
-                type="number"
-                name="minimum_increment"
-                value={formData.minimum_increment}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-400 rounded"
-                required
-                min="0"
-              />
-            </div>
+            {isAuction && (
+              <div>
+                <label className="block text-sm font-medium">Minimum Increment*</label>
+                <input
+                  type="number"
+                  name="minimum_increment"
+                  value={formData.minimum_increment}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-400 rounded"
+                  required
+                  min="0"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium">Description*</label>
               <textarea
@@ -308,31 +366,33 @@ const AddListingForm = () => {
           </div>
         </div>
 
-        {/* Date Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <div>
-            <label className="block text-sm font-medium">Start Date*</label>
-            <input
-              type="datetime-local"
-              name="start_date"
-              value={formData.start_date}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-400 rounded"
-              required
-            />
+        {/* Date Selection - Only show for Auction */}
+        {isAuction && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium">Start Date*</label>
+              <input
+                type="datetime-local"
+                name="start_date"
+                value={formData.start_date}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-400 rounded"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">End Date*</label>
+              <input
+                type="datetime-local"
+                name="end_date"
+                value={formData.end_date}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-400 rounded"
+                required
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium">End Date*</label>
-            <input
-              type="datetime-local"
-              name="end_date"
-              value={formData.end_date}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-400 rounded"
-              required
-            />
-          </div>
-        </div>
+        )}
 
         {/* Image Upload Section */}
         <div className="mt-6">
@@ -374,13 +434,13 @@ const AddListingForm = () => {
         <div className="flex justify-end space-x-4 mt-6">
           <button
             type="button"
+            onClick={handleDiscard}
             className="px-6 py-2 bg-gray-700 text-white rounded shadow-sm hover:bg-gray-600"
           >
             Discard
           </button>
           <button
             type="submit"
-            onClick={handleDiscard}
             className="px-6 py-2 bg-black text-white rounded shadow-sm hover:bg-gray-900"
           >
             Add listing

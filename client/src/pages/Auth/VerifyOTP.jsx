@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { authService } from "../utils/api";
+import { authService } from "../../utils/api";
 import toast,{Toaster} from 'react-hot-toast';
 
 export default function VerifyOTP () {

@@ -1,8 +1,8 @@
 import { Outlet, useNavigate } from "react-router-dom"
-import AdminSideBar from "../components/AdminSideBar"
+import AdminSideBar from "../../components/AdminSideBar"
 import { Search } from "lucide-react"
 import { useDispatch } from "react-redux"
-import { logout } from "../redux/authSlice"
+import { logout } from "../../redux/authSlice"
 
 const AdminDashboard = () => {
     const dispatch = useDispatch();

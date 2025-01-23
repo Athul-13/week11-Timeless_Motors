@@ -26,7 +26,7 @@ module.exports = {
                 html: `
                     <h1>Welcome to Timeless Motors!</h1>
                     <p>Your verification code is: <b>${otp}</b></p>
-                    <p>This code will expire in 10 minutes.</p> 
+                    <p>This code will expire in 1 minute.</p> 
                 ` 
             };
 

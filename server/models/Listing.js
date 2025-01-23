@@ -52,8 +52,8 @@ const listingSchema = new mongoose.Schema(
         default: 0 
     },
     minimum_increment: { 
-        type: Number, 
-        required: true 
+        type: Number,
+        required: function() { return this.type === 'Auction'; }
     },
     type: { 
         type: String,
@@ -75,12 +75,12 @@ const listingSchema = new mongoose.Schema(
         default: null 
     },
     start_date: { 
-        type: Date, 
-        required: true 
+        type: Date,
+        required: function() { return this.type === 'Auction'; } 
     },
     end_date: { 
-        type: Date, 
-        required: true 
+        type: Date,
+        required: function() { return this.type === 'Auction'; }
     },
     images: [
         {
@@ -100,7 +100,7 @@ const listingSchema = new mongoose.Schema(
     approval_status: { 
         type: String, 
         enum: ['pending', 'approved', 'rejected'], 
-        default: 'pending' 
+        default: 'approved' 
     },
     approval_date: { 
         type: Date, 

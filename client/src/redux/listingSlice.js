@@ -13,7 +13,7 @@ const initialState = {
     contact_number: '',
     starting_bid: '',
     minimum_increment: '',
-    type: 'Auction',
+    type: 'Fixed price',
     start_date: '',
     end_date: '',
     images: [],
@@ -37,9 +37,17 @@ const listingSlice = createSlice({
     resetForm(state) {
       state.formData = initialState.formData;
     },
+    setFormData(state, action) {
+      const formattedData = {
+        ...action.payload,
+        start_date: action.payload.start_date ? new Date(action.payload.start_date).toISOString().slice(0, 16) : '',
+        end_date: action.payload.end_date ? new Date(action.payload.end_date).toISOString().slice(0, 16) : '',
+      };
+      state.formData = formattedData;
+    },
   },
 });
 
-export const { updateFormField, addImages, removeImage, resetForm } = listingSlice.actions;
+export const { updateFormField, addImages, removeImage, resetForm, setFormData } = listingSlice.actions;
 
 export default listingSlice.reducer;

@@ -168,7 +168,7 @@ exports.login = async (req, res) => {
             _id: user._id,
             first_name: user.first_name,
             last_name: user.last_name,
-            profilePicture: user.profilePicture,
+            profile_picture: user.profile_picture,
             phone_no: user.phone_no,
             email: user.email,
             status: user.status,
@@ -184,7 +184,6 @@ exports.login = async (req, res) => {
 
 exports.googleAuth = async (req, res) => {
   try {
-    console.log('Received credential:', req.body);
     const { credential } = req.body;
 
     if (!credential) {
@@ -231,7 +230,7 @@ exports.googleAuth = async (req, res) => {
     await user.save();
 
     res.cookie('token', accessToken, {
-        httpOnly: true,
+        httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
         maxAge: 7 * 24 * 60 * 60 * 1000 

@@ -1,6 +1,6 @@
-import Sidebar from "../components/SideBar";
-import Navbar from "../components/Navbar";
-import Footer from "../components/Footer";
+import Sidebar from "../../components/SideBar";
+import Navbar from "../../components/Navbar";
+import Footer from "../../components/Footer";
 import { Outlet } from "react-router-dom";
 
 const UserDetails = () => {

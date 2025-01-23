@@ -1,5 +1,7 @@
 const Listing = require('../models/Listing');
 
+const VALID_STATUSES = ['active', 'sold', 'pending start'];
+
 exports.addListing = async (req, res) => {
     try {
         const user = req.user;
@@ -23,14 +25,16 @@ exports.addListing = async (req, res) => {
             cc_capacity,
             contact_number,
             starting_bid,
-            minimum_increment,
             type,
+            images,
+            // Optional fields for auction
+            minimum_increment,
             start_date,
             end_date,
-            images,
         } = req.body;
 
-        const requiredFields = {
+        // Base required fields for all listing types
+        const baseRequiredFields = {
             description,
             make,
             model,
@@ -41,35 +45,51 @@ exports.addListing = async (req, res) => {
             cc_capacity,
             contact_number,
             starting_bid,
-            minimum_increment,
             type,
-            start_date,
-            end_date,
             images
         };
 
-        const missingFields = Object.entries(requiredFields)
+        // Check base required fields
+        const missingBaseFields = Object.entries(baseRequiredFields)
             .filter(([_, value]) => !value)
             .map(([key]) => key);
 
-        if (missingFields.length > 0) {
+        if (missingBaseFields.length > 0) {
             return res.status(400).json({ 
                 message: 'Missing required fields', 
-                fields: missingFields 
+                fields: missingBaseFields 
             });
-        };
+        }
 
-        if (!Array.isArray(images) || images.length === 0) {
-            return res.status(400).json({
-                message: 'At least one image is required'
-            });
-        };
+        // Additional validation for auction type
+        if (type === 'Auction') {
+            const auctionFields = { minimum_increment, start_date, end_date };
+            const missingAuctionFields = Object.entries(auctionFields)
+                .filter(([_, value]) => !value)
+                .map(([key]) => key);
 
-        const newListing = new Listing({
-            ...req.body,
+            if (missingAuctionFields.length > 0) {
+                return res.status(400).json({ 
+                    message: 'Missing required auction fields', 
+                    fields: missingAuctionFields 
+                });
+            }
+        }
+
+        // Create listing data object
+        const listingData = {
+            ...baseRequiredFields,
             seller_id: user.id
-        });
+        };
 
+        // Add auction-specific fields only if type is auction
+        if (type === 'Auction') {
+            listingData.minimum_increment = minimum_increment;
+            listingData.start_date = start_date;
+            listingData.end_date = end_date;
+        }
+
+        const newListing = new Listing(listingData);
         await newListing.save();
 
         return res.status(201).json({
@@ -84,12 +104,21 @@ exports.addListing = async (req, res) => {
 
 exports.getAllListings = async (req, res) => {
     try {
-        const listings = await Listing.find({is_deleted:false});
-        res.status(201).json(listings);
-    } catch (err) {
-        res.status(500).json({message: err.message});
+      const listings = await Listing.find()
+        .populate('seller_id', 'first_name last_name email')
+        .populate('approved_by', 'first_name last_name')
+        .sort({ createdAt: -1 });
+  
+      res.json(listings);
+    } catch (error) {
+      console.error('Error in getAllListings:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error fetching listings',
+        error: error.message 
+      });
     }
-}
+};
 
 exports.getListingById = async (req, res) => {
     try {
@@ -124,3 +153,104 @@ exports.getListingById = async (req, res) => {
         });
       }
 };
+
+exports.updateListing = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    
+    const listing = await Listing.findById(id);
+    
+    if (!listing) {
+      return res.status(404).json({ message: 'Listing not found' });
+    }
+
+    // Check if user has permission to update this listing
+    const isSeller = listing.seller_id.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isSeller && !isAdmin) {
+      return res.status(403).json({ message: 'Not authorized to update this listing' }); // Deny access
+    }
+
+    // Update the listing
+    const updatedListing = await Listing.findByIdAndUpdate(
+      id,
+      { ...updateData, updated_at: Date.now() },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json(updatedListing);
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: error.message });
+    }
+    console.error('Error updating listing:', error);
+    res.status(500).json({ message: 'Error updating listing' });
+  }
+};
+
+exports.updateApprovalStatus = async (req, res) => {
+  try {
+    const {listingId} = req.params;
+    const {status} = req.body;
+
+    const listing = await Listing.findById(listingId);
+    if(!listing) {
+      return res.status(404).json({message: "Listing not found"});
+    }
+
+    listing.approval_status = status.toLowerCase();
+
+    await listing.save();
+
+    return res.status(200).json({message: "Status updated successfully"})
+
+  } catch(err) {
+    console.error('Error in updating status:', err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while updating lising status"
+    })
+  }
+};
+
+exports.updateListingStatus = async (req, res) => {
+  try {
+    const {listingId} = req.params;
+    const {status} = req.body;
+
+    if(!status || !VALID_STATUSES.includes(status.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Status must be one of: ${VALID_STATUSES.join(', ')}`
+      });
+    }
+
+    const listing = await Listing.findById(listingId);
+
+    if(!listing) {
+      return res.status(404).json({message: "Listing not found"});
+    }
+
+    if (listing.status === status) {
+      return res.status(200).json({
+          success: true,
+          message: "Listing status is already " + status,
+          listing
+      });
+    }
+
+    listing.status = status.toLowerCase();
+
+    await listing.save();
+
+    return res.status(200).json({message: "Status updated successfully"})
+  } catch(err) {
+    console.error('Error in updating status:', err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while updating lising status"
+    })
+  }
+}

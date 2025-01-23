@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { createCategory, addSubcategory, fetchCategories } from '../../redux/categorySlice';
+import toast, { Toaster } from 'react-hot-toast';
 
 const AddCategory = () => {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ const AddCategory = () => {
   const [formData, setFormData] = useState({
     name: '',
     status: true,
-    parentCategoryId: '' // For subcategories
+    parentCategoryId: ''
   });
 
   const [isSubcategory, setIsSubcategory] = useState(false);
@@ -24,6 +25,12 @@ const AddCategory = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Create a loading toast that we can dismiss later
+    const loadingToast = toast.loading(
+      isSubcategory ? 'Creating subcategory...' : 'Creating category...'
+    );
+
     try {
       if (isSubcategory) {
         await dispatch(addSubcategory({
@@ -40,15 +47,27 @@ const AddCategory = () => {
           status: formData.status
         })).unwrap();
       }
-      console.log('category added successfully')
+      
+      // Dismiss loading toast and show success
+      toast.dismiss(loadingToast);
+      toast.success(
+        isSubcategory 
+          ? 'Subcategory created successfully!' 
+          : 'Category created successfully!'
+      );
+      
       navigate('/admin/categories');
     } catch (err) {
+      // Dismiss loading toast and show error
+      toast.dismiss(loadingToast);
+      toast.error(err.message || 'An error occurred while saving');
       setError(err.message || 'An error occurred while saving');
     }
   };
 
   return (
     <div className="max-w-2xl mx-auto p-8">
+      <Toaster position='top-center'/>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-800">
           {isSubcategory ? 'Add New Subcategory' : 'Add New Category'}

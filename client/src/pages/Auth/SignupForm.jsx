@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { authService } from "../utils/api";
+import { authService } from "../../utils/api";
 import toast, { Toaster } from 'react-hot-toast';
 import { GoogleLogin } from '@react-oauth/google';
 import { useDispatch } from "react-redux";
-import { setCredentials } from "../redux/authSlice";
+import { setCredentials } from "../../redux/authSlice";
 
 
 const SignupForm = () => {
@@ -25,10 +25,6 @@ const SignupForm = () => {
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
-
-  // const handleChange = (e) => {
-  //   setFormData({...formData,[e.target.name]:e.target.value});
-  // };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -274,9 +270,9 @@ const SignupForm = () => {
         </div>
 
         {/* Google Sign-Up Button */}
-        <button className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 transition-colors">
+        
           <GoogleSignUp />
-        </button>
+        
       </div>
     </div>
     </>

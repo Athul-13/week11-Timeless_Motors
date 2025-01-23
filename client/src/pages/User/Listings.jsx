@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Heart, ChevronDown, ChevronUp } from "lucide-react";
-import Navbar from "../components/Navbar";
-import Footer from "../components/Footer";
-import { categoryService, listingService } from "../utils/api";
+import Navbar from "../../components/Navbar";
+import Footer from "../../components/Footer";
+import { categoryService, listingService } from "../../utils/api";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 const Accordion = ({ items, selectedFilters, onFilterChange }) => {
@@ -64,7 +64,7 @@ const CarCard = ({ listing }) => (
       <h3 className="font-medium">{`${listing.year} ${listing.make} ${listing.model}`}</h3>
       <div className="text-sm text-neutral-600 mt-1">{listing.body_type}</div>
       <div className="text-lg font-bold mt-1">
-        $ {listing.current_bid > 0 ? listing.current_bid.toLocaleString() : listing.starting_bid.toLocaleString()}
+        ₹ {listing.current_bid > 0 ? listing.current_bid.toLocaleString() : listing.starting_bid.toLocaleString()}
       </div>
       <div className="flex justify-between items-center mt-2">
         <div className="text-sm text-neutral-600">{listing.type}</div>

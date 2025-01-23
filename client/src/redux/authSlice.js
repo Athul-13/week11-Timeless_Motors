@@ -53,7 +53,7 @@ const loadFromCookies = () => {
             const parsedUser = JSON.parse(user);
             initialState.user = {
                 ...parsedUser,
-                profilePicture: parsedUser.profilePicture || null
+                profile_picture: parsedUser.profile_picture || null
             };
             initialState.isAuthenticated = true;
             initialState.isAdmin = parsedUser.role === 'admin';
@@ -128,6 +128,23 @@ const authSlice = createSlice({
 
             console.log('Successfully logged out and cleared all auth data');
         },
+        updateUser: (state, action) => {
+            // Merge the new user data with existing user data
+            state.user = { 
+                ...state.user, 
+                ...action.payload 
+            };
+
+            // Update user cookie to persist changes
+            if (state.user) {
+                Cookies.set('user', JSON.stringify(state.user), {
+                    expires: 7,
+                    secure: import.meta.env.MODE === 'production',
+                    sameSite: 'strict',
+                    path: '/'
+                });
+            }
+        },
     },
     extraReducers: (builder) => {
         builder
@@ -157,5 +174,5 @@ const authSlice = createSlice({
     }
 });
 
-export const { logout } = authSlice.actions;
+export const { logout, updateUser } = authSlice.actions;
 export default authSlice.reducer;

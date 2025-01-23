@@ -127,6 +127,8 @@ exports.updateSubcategory = async (req, res) => {
         const { categoryId, subcategoryId } = req.params;
         const { name, isDeleted } = req.body;
 
+        console.log('back:', req.params)
+
         const category = await Category.findById(categoryId);
         if (!category) {
             return res.status(404).json({ message: "Category not found" });
