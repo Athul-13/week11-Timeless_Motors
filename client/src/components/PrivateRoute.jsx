@@ -15,7 +15,7 @@ const PrivateRoute = ({children}) => {
     if (!isAuthenticated || !token) {
         console.log('Redirecting to login: Not authenticated');
         return <Navigate 
-            to="/login" 
+            to="/" 
             replace={true} 
             state={{ from: location.pathname }}
         />;

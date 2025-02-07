@@ -4,6 +4,7 @@ const {generateAccessToken, generateRefreshToken} = require('../utils/tokenUtils
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const crypto = require('crypto');
+const logActivity = require('../utils/logActivity');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -51,7 +52,7 @@ exports.register = async (req, res) => {
         console.error(err);
         res.status(500).json({message: err.message});
     }
-}
+};
 
 exports.verifyOTP = async (req, res) => {
     try {
@@ -78,19 +79,10 @@ exports.verifyOTP = async (req, res) => {
         user.password = password; 
         user.otp = undefined;
 
-        const accessToken = generateAccessToken(user.user_id, user.role);
-        const refreshToken = generateRefreshToken(user.user_id);
-
-        user.refresh_token = refreshToken;
 
         await user.save();
 
-        res.cookie('token', accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000 
-        })
+        await logActivity(user._id, "User Registered", "New user account created", req);
 
         res.status(201).json({
             success: true,
@@ -103,13 +95,40 @@ exports.verifyOTP = async (req, res) => {
                 status: user.status,
                 role: user.role
             },
-            accessToken
         });
 
     } catch (err) {
         console.error(err);
         res.status(500).json({message: err.message});    }
-}
+};
+
+exports.verifyForgotPasswordOTP = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+
+        if (user.otp !== otp) {
+            return res.status(400).json({ message: 'Invalid OTP' });
+        }
+
+        if (user.otpExpiresAt < Date.now()) {
+            return res.status(400).json({ message: 'OTP has expired, please request a new one' });
+        }
+
+        user.otp = undefined;
+        await user.save();
+
+        res.status(200).json({ success: true, message: 'OTP verified successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.message });
+    }
+};
 
 exports.resendOTP = async (req, res) => {
     try {
@@ -119,7 +138,7 @@ exports.resendOTP = async (req, res) => {
             return res.status(400).json({ message: "Email is required" });
         }
 
-        const user = await User.findOne({ email, status: 'inactive' });
+        const user = await User.findOne({email});
 
         if (!user) {
             return res.status(400).json({ message: "No such user found" });
@@ -146,7 +165,29 @@ exports.resendOTP = async (req, res) => {
         console.error(err);
         res.status(500).json({message: err.message});
     }
-}
+};
+
+exports.changePassword = async (req, res) => {
+    try {
+        const {email, password} = req.body.userData;
+
+        const user = await User.findOne({email});
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        user.password = password;
+
+        await user.save();
+
+        await logActivity(user._id, "Password Changed", "User successfully changed password", req);
+
+        res.status(200).json({ success: true, message: 'Password changed successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.message });
+    }
+};
 
 exports.login = async (req, res) => {
     try {
@@ -154,7 +195,16 @@ exports.login = async (req, res) => {
 
         const user = await User.findOne({email});
 
+        if (user.status === 'inactive') {
+            await logActivity(user._id, "Blocked Login Attempt", "Blocked user tried to log in", req);
+            return res.status(403).json({
+                message: 'User has been blocked from logging in',
+                showToast: true, 
+            });
+        }
+
         if(!user || !(await user.matchPassword(password))) {
+            await logActivity(user?._id || "Unknown", "Failed Login Attempt", `Failed login attempt for email: ${email}`, req);
             return res.status(401).json({message: 'Invalid email or password'});
         }
 
@@ -163,6 +213,15 @@ exports.login = async (req, res) => {
 
         user.refreshToken = refreshToken;
         await user.save();
+
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: false,
+            secure: true, 
+            sameSite: 'Strict', 
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        await logActivity(user._id, "User Login", "User successfully logged in", req);
 
         res.json({
             _id: user._id,
@@ -173,14 +232,13 @@ exports.login = async (req, res) => {
             email: user.email,
             status: user.status,
             role: user.role,
-            accessToken,
-            refreshToken
+            accessToken
         });
     } catch (err) {
         console.error(err);
         res.status(500).json({message: err.message});
     }
-}
+};
 
 exports.googleAuth = async (req, res) => {
   try {
@@ -222,6 +280,15 @@ exports.googleAuth = async (req, res) => {
       await user.save();
     }
 
+    if (user.status === "inactive") {
+        // Log blocked login attempt
+        await logActivity(user._id, "Google Login Failed", "Blocked user attempted login", req);
+        return res.status(403).json({
+            message: "User has been blocked from logging in",
+            showToast: true,
+        });
+    }
+
     // Generate tokens
     const accessToken = generateAccessToken(user._id, user.role);
     const refreshToken = generateRefreshToken(user._id);
@@ -229,12 +296,14 @@ exports.googleAuth = async (req, res) => {
     user.refresh_token = refreshToken;
     await user.save();
 
-    res.cookie('token', accessToken, {
+    res.cookie('refreshToken', refreshToken, {
         httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
         maxAge: 7 * 24 * 60 * 60 * 1000 
     })
+
+    await logActivity(user._id, "Google Login", "User logged in via Google", req);
 
     res.status(200).json({
       success: true,
@@ -260,8 +329,36 @@ exports.logout = async (req, res) => {
         const user = await User.findById(req.user._id);
         user.refreshToken = null;
         await user.save();
+        await logActivity(user._id, "Logout", "User logged out successfully", req);
         res.json({message: 'logout successfull'});
     } catch (err) {
         res.status(500).json({message: err.message});
     }
 };
+
+exports.refreshToken = async (req, res) => {
+    try {
+        const {refreshToken} = req.body;
+
+        if(!refreshToken) {
+            return res.status(401).json({message: 'token not provided'});
+        }
+
+        const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+        const user = await User.findById(decoded.userId);
+
+        if(!user || user.refreshToken !== refreshToken) {
+            return res.status(401).json({message: 'invalid token'});
+        }
+
+        const accessToken = generateAccessToken(user._id, user.role);
+        const newRefreshToken = generateRefreshToken(user._id);
+
+        user.refreshToken = newRefreshToken;
+        await user.save();
+
+        res.json({accessToken, refreshToken: newRefreshToken});
+    } catch (err) {
+        res.status(401).json({message: 'invalid token'});
+    }
+}

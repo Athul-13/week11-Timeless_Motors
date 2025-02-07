@@ -1,30 +1,93 @@
-import { Plus, X, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Plus, Upload, X } from "lucide-react";
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from "react-router-dom";
-import toast, { Toaster } from 'react-hot-toast';
-import Footer from "../../components/Footer";
-import Navbar from "../../components/Navbar";
-import { addImages, removeImage, resetForm, updateFormField } from '../../redux/listingSlice';
+import { useNavigate, useParams } from "react-router-dom";
+import { addImages, removeImage, resetForm, updateFormField, setFormData } from '../../redux/listingSlice';
 import { listingService } from "../../utils/api";
+import toast, { Toaster } from 'react-hot-toast';
 import { useEffect, useMemo, useState } from "react";
 import { fetchCategories } from "../../redux/categorySlice";
+import Navbar from "../../components/Navbar";
+import Footer from "../../components/Footer";
 
 const AddListingForm = () => {
+  const { listingId } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const formData = useSelector((state) => state.listing.formData);
   const categories = useSelector((state) => state.categories.categories);
-  const [editingImage, setEditingImage] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const CLOUD_NAME = 'dncoxucat';
   const UPLOAD_PRESET = 'listing_images';
 
+  const isEditMode = Boolean(listingId);
+
   useEffect(() => {
-    dispatch(fetchCategories());
+    const loadCategories = async () => {
+      try {
+        await dispatch(fetchCategories()).unwrap();
+      } catch (error) {
+        toast.error(
+          <div className="flex items-center gap-2">
+            <AlertCircle size={18} />
+            <span>Failed to load categories</span>
+          </div>
+        );
+      }
+    };
+    loadCategories();
   }, [dispatch]);
 
-  const categorizedOptiions = useMemo(()=>{
-    const makeCategory = categories.find(cat=> cat.name.toLowerCase() === 'make');
+  useEffect(() => {
+    const loadListingData = async () => {
+      console.log('Current listingId:', listingId);
+      console.log('Is Edit Mode:', isEditMode);
+
+      if (!isEditMode) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const listing = await listingService.getListingById(listingId);
+        dispatch(setFormData(listing.data));
+        toast.success(
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={18} />
+            <span>Listing data loaded successfully</span>
+          </div>
+        );
+      } catch (error) {
+        toast.error(
+          <div className="flex items-center gap-2">
+            <AlertCircle size={18} />
+            <span>Failed to load listing data</span>
+          </div>
+        );
+        navigate('/admin/auctions');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadListingData();
+
+    return () => {
+      dispatch(resetForm());
+    };
+  }, [dispatch, listingId, navigate, isEditMode]);
+
+  const categorizedOptiions = useMemo(() => {
+    if (!categories?.length) {
+      return {
+        makes: [],
+        transmissions: [],
+        fuels: [],
+        listingTypes: []
+      };
+    }
+
+    const makeCategory = categories.find(cat => cat.name.toLowerCase() === 'make');
     const transmissionCategory = categories.find(cat => cat.name.toLowerCase() === 'transmission');
     const fuelCategory = categories.find(cat => cat.name.toLowerCase() === 'fuel type');
     const listingCategory = categories.find(cat => cat.name.toLowerCase() === 'listing type');
@@ -35,9 +98,25 @@ const AddListingForm = () => {
       fuels: fuelCategory?.subCategories || [],
       listingTypes: listingCategory?.subCategories || []
     };
-  },[categories]);
+  }, [categories]);
 
   const isAuction = formData.type?.toLowerCase() === 'auction';
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  if (isLoading || !categories?.length) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -54,10 +133,6 @@ const AddListingForm = () => {
     const formData = new FormData();
     formData.append('file',file);
     formData.append('upload_preset',UPLOAD_PRESET);
-
-    for (let pair of formData.entries()) {
-      console.log(pair[0] + ': ' + pair[1]);
-  }
 
     try{
       const response = await fetch(
@@ -116,7 +191,6 @@ const AddListingForm = () => {
     }
   };
 
-
   const deleteImage = (index) => {
     dispatch(removeImage(index));
     toast(
@@ -128,7 +202,7 @@ const AddListingForm = () => {
   };
 
   const handleDiscard = () => {
-    navigate('/listings');
+    navigate(-1);
   };
 
   const handleSubmit = async (e) => {
@@ -147,7 +221,7 @@ const AddListingForm = () => {
     const toastId = toast.loading(
       <div className="flex items-center gap-2">
         <Upload className="animate-bounce" size={18} />
-        <span>Creating listing...</span>
+        <span>{isEditMode ? 'Updating' : 'Creating'} listing...</span>
       </div>
     );
 
@@ -160,22 +234,28 @@ const AddListingForm = () => {
         }))
       };
 
-      const response = await listingService.addListing(transformedData);
+      let response;
+      if (isEditMode) {
+        response = await listingService.updateListing(listingId, transformedData);
+      } else {
+        response = await listingService.addListing(transformedData);
+      }
+
       toast.dismiss(toastId);
       toast.success(
         <div className="flex items-center gap-2">
           <CheckCircle2 size={18} />
-          <span>Listing created successfully!</span>
+          <span>Listing {isEditMode ? 'updated' : 'created'} successfully!</span>
         </div>
       );
       dispatch(resetForm());
-      navigate('/listings');
+      navigate('/profile/myListings');
     } catch (err) {
       toast.dismiss(toastId);
       toast.error(
         <div className="flex items-center gap-2">
           <AlertCircle size={18} />
-          <span>{err.message || 'Failed to create listing'}</span>
+          <span>{err.message || `Failed to ${isEditMode ? 'update' : 'create'} listing`}</span>
         </div>
       );
     }
@@ -184,28 +264,30 @@ const AddListingForm = () => {
   return (
     <>
       <Toaster position="top-center" />
-      <Navbar />
+      {!isEditMode && <Navbar />}
       <form onSubmit={handleSubmit} className="max-w-6xl mx-auto my-10 p-6 bg-gray-300">
-        <h1 className="text-xl font-bold mb-4">Add some basic details</h1>
+        <h1 className="text-xl font-bold mb-4">
+        {isEditMode ? 'Edit Listing' : 'Add some basic details'}
+        </h1>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Left Column */}
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium">Make*</label>
               <select
-                name="make"
-                value={formData.make}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-400 rounded"
-                required
-              >
-                <option value="">Select Make</option>
-                {categorizedOptiions.makes.map((make) => (
+              name="make"
+              value={formData.make}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-400 rounded"
+              required
+            >
+              <option value="">Select Make</option>
+              {categorizedOptiions?.makes?.map((make) => (
                 <option key={make._id} value={make.name} data-name={make.name}>
                   {make.name}
                 </option>
-                ))}
-              </select>
+              ))}
+            </select>
             </div>
             <div>
               <label className="block text-sm font-medium">Model*</label>
@@ -277,53 +359,52 @@ const AddListingForm = () => {
             <div>
               <label className="block text-sm font-medium">Transmission Type*</label>
               <select
-                name="transmission_type"
-                value={formData.transmission_type}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-400 rounded"
-                required
-              >
-                <option value="">Select Transmission</option>
-                {categorizedOptiions.transmissions.map((transmission) => (
+              name="transmission_type"
+              value={formData.transmission_type}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-400 rounded"
+              required
+            >
+              <option value="">Select Transmission</option>
+              {categorizedOptiions?.transmissions?.map((transmission) => (
                 <option key={transmission._id} value={transmission.name} data-name={transmission.name}>
                   {transmission.name}
                 </option>
-                ))}
-              </select>
+              ))}
+            </select>
             </div>
             <div>
               <label className="block text-sm font-medium">Fuel Type*</label>
               <select
-                name="fuel_type"
-                value={formData.fuel_type}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-400 rounded"
-                required
-              >
-                <option value="">Select Fuel Type</option>
-                {categorizedOptiions.fuels.map((fuel) => (
+              name="fuel_type"
+              value={formData.fuel_type}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-400 rounded"
+              required
+            >
+              <option value="">Select Fuel Type</option>
+              {categorizedOptiions?.fuels?.map((fuel) => (
                 <option key={fuel._id} value={fuel.name} data-name={fuel.name}>
                   {fuel.name}
                 </option>
-                ))}
-              </select>
+              ))}
+            </select>
             </div>
             <div>
-              <label className="block text-sm font-medium">Listing Type*</label>
-              <select
-                name="type"
-                value={formData.type}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-400 rounded"
-                required
-              >
-                <option value="">Select listing type</option>
-                {categorizedOptiions.listingTypes.map((listing) => (
+            <select
+              name="type"
+              value={formData.type}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-400 rounded"
+              required
+            >
+              <option value="">Select listing type</option>
+              {categorizedOptiions?.listingTypes?.map((listing) => (
                 <option key={listing._id} value={listing.name} data-name={listing.name}>
                   {listing.name}
                 </option>
-                ))}
-              </select>
+              ))}
+            </select>
             </div>
             <div>
               <label className="block text-sm font-medium">
@@ -443,11 +524,11 @@ const AddListingForm = () => {
             type="submit"
             className="px-6 py-2 bg-black text-white rounded shadow-sm hover:bg-gray-900"
           >
-            Add listing
+            {isEditMode ? 'Save changes' : 'Add listing'}
           </button>
         </div>
       </form>
-      <Footer />
+      {!isEditMode && <Footer />}
     </>
   );
 };

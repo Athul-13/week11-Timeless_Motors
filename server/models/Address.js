@@ -1,31 +1,50 @@
 const mongoose = require('mongoose');
 
-const addressSchema = new mongoose.Schema({
-  user_id: {
+const AddressSchema = new mongoose.Schema({
+  user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  street: {
+  name: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
-  town: {
+  phone_number: {
     type: String,
-    required: true
+    required: true,
+    match: /^[0-9]{10}$/, // Ensures a 10-digit phone number
+  },
+  pincode: {
+    type: String,
+    required: true,
+  },
+  landmark: {
+    type: String,
+    trim: true
+  },
+  address: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  city: {
+    type: String,
+    required: true,
+    trim: true
   },
   state: {
     type: String,
-    required: true
-  },
-  postal_code: {
-    type: String,
-    required: true
+    required: true,
+    trim: true
   },
   country: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
+    default: 'India'
   }
-}, { timestamps: true });
+},{timestamps: true});
 
-module.exports = mongoose.model('Address', addressSchema);
+module.exports = mongoose.model('Address', AddressSchema);

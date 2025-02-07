@@ -3,9 +3,19 @@ const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const cookieParser = require('cookie-parser');
+const initializeSocket = require('./socket/socketConfig');
+const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
+const http = require('http'); 
+const KYC = require("./models/KYC.js");
 require('dotenv').config();
 
+const queueService = require('./services/queueService.js');
+
+
 const app = express();
+const server = http.createServer(app);
+const io = initializeSocket(server);
 
 connectDB();
 
@@ -14,19 +24,122 @@ app.use(cors({
     credentials: true,
 }));
 
+app.set('io', io);
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const storage = multer.memoryStorage();
+
+const fileFilter = (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPG, PNG & PDF files are allowed.'), false);
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    limits: {
+      fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: fileFilter
+});
+
+const uploadToCloudinary = async (file) => {
+    return new Promise((resolve, reject) => {
+      // Create a readable stream from buffer
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'kyc-documents', 
+          resource_type: 'auto', 
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+  
+      // Convert buffer to stream and pipe to Cloudinary
+      const { Readable } = require('stream');
+        const bufferStream = new Readable();
+        bufferStream.push(file.buffer);
+        bufferStream.push(null);
+        bufferStream.pipe(stream);
+    });
+};
+
+app.post('/api/kyc/upload', upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+  
+      // Upload file to Cloudinary
+      const cloudinaryResponse = await uploadToCloudinary(req.file);
+  
+      // Here you might want to save the Cloudinary response details to your database
+      const newKYC = new KYC({
+        user: req.body.userId,
+        documentType: req.body.documentType,
+        documentUrl: cloudinaryResponse.secure_url
+      });
+      
+      await newKYC.save();
+      
+  
+      res.json({
+        message: 'File uploaded successfully',
+        file: {
+          url: cloudinaryResponse.secure_url,
+          publicId: cloudinaryResponse.public_id,
+          format: cloudinaryResponse.format,
+          size: cloudinaryResponse.bytes
+        }
+      });
+  
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(500).json({ 
+        message: 'Error uploading file',
+        error: error.message 
+      });
+    }
+  });
+
 app.use(express.json({limit: '50mb'}));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
 app.use(cookieParser());
 
 app.use('/api/auth', authRoutes);
 
+app.get('/api/queue-health', async (req, res) => {
+  const health = await queueService.getQueueHealth();
+  res.json(health);
+});
+
 app.use((req, res) => {
-    res.status(404);
-    res.json({ message: 'Resource not found' });
+  res.status(404);
+  res.json({ message: 'Resource not found' });
+});
+
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  await queueService.shutdown();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, ()=>{
-    console.log(`console is running on port: http//:localhost:${PORT}`);
+server.listen(PORT, async ()=>{
+    console.log(`console is running on port: http://localhost:${PORT}`);
+
+    await queueService.processExistingAuctions();
 })

@@ -36,7 +36,10 @@ export const updateProfilePicture = createAsyncThunk(
     async (imageUrl, { dispatch, rejectWithValue }) => {
       try {
         const response = await profileServices.updateProfilePicture(imageUrl);
-        dispatch(updateUser(response));
+        dispatch(updateUser({
+          ...response,
+          profilePicture: response.profile_picture || response.profilePicture
+        }));
         return response;
       } catch (error) {
         return rejectWithValue(error.response?.data?.message || 'Failed to update profile picture');
@@ -53,6 +56,7 @@ const profileSlice = createSlice({
       last_name: '',
       email: '',
       phone_no: '',
+      profile_picture: '',
       address: {
         street: '',
         town: '',
@@ -111,6 +115,20 @@ const profileSlice = createSlice({
         state.isFormChanged = false;
       })
       .addCase(updateAddress.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Add Profile Picture cases
+      .addCase(updateProfilePicture.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateProfilePicture.fulfilled, (state, action) => {
+        state.loading = false;
+        state.formData.profile_picture = action.payload.profilePicture;
+        state.isFormChanged = false;
+      })
+      .addCase(updateProfilePicture.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

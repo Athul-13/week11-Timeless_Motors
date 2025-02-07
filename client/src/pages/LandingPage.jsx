@@ -29,7 +29,7 @@ const CarCard = ({ listing }) => (
           <div className="text-sm text-neutral-600">{listing.bid_count} Bids</div>
         </div>
         <div className="text-sm text-neutral-600 mt-1">
-          Ends: {new Date(listing.end_date).toLocaleDateString()}
+          Ends: {listing.type === "Fixed price" ? "Not Applicable" : new Date(listing.end_date).toLocaleDateString()}
         </div>
       </div>
     </div>
@@ -108,7 +108,7 @@ const LandingPage = () => {
                 </div>
                 <h3 className="text-lg font-medium mb-2">1949 Buick Super</h3>
                 <div className="flex justify-between items-baseline mb-2">
-                <div className="text-lg font-semibold">$ 76,925.00</div>
+                <div className="text-lg font-semibold">₹ 76,925.00</div>
                 <div className="text-sm text-gray-600">10 Bids</div>
                 </div>
                 <div className="text-sm text-gray-600">
@@ -127,7 +127,7 @@ const LandingPage = () => {
                 </div>
                 <h3 className="text-lg font-medium mb-2">2001 Bentley Continental Le Mans</h3>
                 <div className="flex justify-between items-baseline mb-2">
-                <div className="text-lg font-semibold">$ 69,425.00</div>
+                <div className="text-lg font-semibold">₹ 69,425.00</div>
                 <div className="text-sm text-gray-600">18 Bids</div>
                 </div>
                 <div className="text-sm text-gray-600">
@@ -146,7 +146,7 @@ const LandingPage = () => {
                 </div>
                 <h3 className="text-lg font-medium mb-2">Rolls Royce Silver Spirit</h3>
                 <div className="flex justify-between items-baseline mb-2">
-                <div className="text-lg font-semibold">$ 200,591.00</div>
+                <div className="text-lg font-semibold">₹ 200,591.00</div>
                 <div className="text-sm text-gray-600">29 Bids</div>
                 </div>
                 <div className="text-sm text-gray-600">

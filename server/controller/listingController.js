@@ -5,6 +5,7 @@ const VALID_STATUSES = ['active', 'sold', 'pending start'];
 exports.addListing = async (req, res) => {
     try {
         const user = req.user;
+        console.log('req', req.body);
 
         if(!user) {
             return res.status(401).json({ message: 'Unauthorized user' });
@@ -92,6 +93,9 @@ exports.addListing = async (req, res) => {
         const newListing = new Listing(listingData);
         await newListing.save();
 
+        const details = `User added a new listing: ${make} ${model} (${year}), Type: ${type}`;
+        await logActivity(user.id, "New Listing Added", details, req);
+
         return res.status(201).json({
             success: true,
             message: 'new listing created !'
@@ -124,7 +128,7 @@ exports.getListingById = async (req, res) => {
     try {
         const { id } = req.params;
     
-        const listing = await Listing.findById(id);
+        const listing = await Listing.findById(id).populate('seller_id', 'first_name last_name');
     
         if (!listing) {
           return res.status(404).json({
@@ -179,6 +183,9 @@ exports.updateListing = async (req, res) => {
       { ...updateData, updated_at: Date.now() },
       { new: true, runValidators: true }
     );
+
+    const details = `User updated listing: ${listing.make} ${listing.model} (${listing.year})`;
+    await logActivity(req.user._id, "Listing Updated", details, req);
 
     res.status(200).json(updatedListing);
   } catch (error) {
@@ -254,3 +261,26 @@ exports.updateListingStatus = async (req, res) => {
     })
   }
 }
+
+exports.getListingsByUser = async (req, res) => {
+  try {
+      const userId = req.user._id;
+
+      const listings = await Listing.find({ seller_id: userId, is_deleted: false })
+          .sort({ createdAt: -1 }) 
+
+      return res.status(200).json({
+          success: true,
+          count: listings.length,
+          data: listings
+      });
+
+  } catch (error) {
+      console.error('Error in getListingsByUser:', error);
+      return res.status(500).json({
+          success: false,
+          message: 'Error retrieving user listings',
+          error: error.message
+      });
+  }
+};

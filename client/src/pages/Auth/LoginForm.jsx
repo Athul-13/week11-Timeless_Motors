@@ -25,6 +25,11 @@ const LoginForm = () => {
     try {
       const data = await authService.login({email, password});
 
+      if (data.status === 'inactive') {
+        toast.error('User has been blocked from logging in');
+        return; 
+    }
+
       dispatch(setCredentials({
         token: data.accessToken,
         refreshToken: data.refreshToken,
@@ -83,48 +88,7 @@ const LoginForm = () => {
     <>
 
     <Toaster 
-      position="top-center" 
-      toastOptions={{
-        success: {
-          style: {
-            background: '#4BB543', 
-            color: '#FFFFFF',
-            borderRadius: '4px',
-            padding: '16px 24px',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)' 
-          },
-          icon: '✔',               
-          duration: 3000,          
-          // Add progress bar to success
-          progress: {
-            duration: 3000, 
-            style: {
-              backgroundColor: '#FFFFFF', 
-              height: '4px' 
-            }
-          }
-        },
-        error: {
-          style: {
-            background: '#FF3333',
-            color: '#FFFFFF',
-            borderRadius: '4px',
-            padding: '16px 24px',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)' 
-          },
-          icon: '✖',
-          duration: 3000,          
-          // Add progress bar to error         
-          progress: {
-            duration: 3000,
-            style: {
-              backgroundColor: '#FFFFFF',
-              height: '4px' 
-            }
-          } 
-        }
-      }}
-    /> 
+      position="top-center"/> 
 
     {/* Header */}
     <header className="bg-gray-200 w-full py-4 text-center">
@@ -181,9 +145,9 @@ const LoginForm = () => {
 
             {/* Forgot Password */}
             <div className="text-right">
-              <button className="text-sm font-bold text-gray-500 hover:underline">
+              <Link to={'/forgot-password'} className="text-sm font-bold text-gray-500 hover:underline">
                 Forgot password?
-              </button>
+              </Link>
             </div>
 
             {/* Log In Button */}

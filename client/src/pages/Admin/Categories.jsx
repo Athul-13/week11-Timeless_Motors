@@ -8,18 +8,23 @@ import { ChevronDown, ChevronRight, Pencil, Trash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchCategories, updateCategory, updateSubcategory } from '../../redux/categorySlice';
+import { deleteCategory, deleteSubcategory, fetchCategories, updateCategoryStatus, updateSubcategoryStatus } from '../../redux/categorySlice';
 import toast, { Toaster } from 'react-hot-toast';
 
 const Categories = () => {
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [loading, setLoading] = useState(true);
   const categories = useSelector((state)=> state.categories.categories);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
   useEffect(()=> {
+    setTimeout(() => {
+      setLoading(false); // Hide loader after 2 seconds
+    }, 500);
+
     dispatch(fetchCategories())
   },[dispatch])
 
@@ -118,8 +123,7 @@ const Categories = () => {
   };
 
   const handleEdit = (category) => {
-    console.log('Edit category:', category);
-    // Implement edit functionality
+    navigate(`/admin/categories/edit/${category._id}`)
   };
 
   const handleDelete = (category) => {
@@ -167,13 +171,13 @@ const Categories = () => {
       const newStatus = !selectedCategory.isDeleted;
       
       if (selectedCategory.parentId) {
-        await dispatch(updateSubcategory({
+        await dispatch(updateSubcategoryStatus({
           categoryId: selectedCategory.parentId,
           subcategoryId: selectedCategory._id,
           isDeleted: newStatus 
         })).unwrap();
       } else {
-        await dispatch(updateCategory({
+        await dispatch(updateCategoryStatus({
           id: selectedCategory._id,
           categoryData: { isDeleted: newStatus }
         })).unwrap();
@@ -191,6 +195,14 @@ const Categories = () => {
 
   const handleAddSubCategory = () => {
     navigate('/admin/categories/new-SubCategory')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
+      </div>
+    );
   }
 
   return (

@@ -29,17 +29,66 @@ api.interceptors.request.use(
     }
 )
 
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
+
+        // If error is 401 and we haven't tried to refresh token yet
+        if (error.response?.status === 401 && !originalRequest._retry && Cookies.get('refreshToken')) {
+            originalRequest._retry = true;
+
+            try {
+                // Attempt to refresh token
+                const response = await api.post('/api/refresh', {
+                    refreshToken: Cookies.get('refreshToken')
+                });
+
+                const { token } = response.data;
+                Cookies.set('token', token);
+
+                // Retry original request
+                originalRequest.headers.Authorization = `Bearer ${token}`;
+                return api(originalRequest);
+            } catch (refreshError) {
+                // If refresh fails, clear all auth data and redirect to login
+                Cookies.remove('token');
+                Cookies.remove('refreshToken');
+                Cookies.remove('user');
+                window.location.href = '/login';
+                return Promise.reject(refreshError);
+            }
+        }
+
+        // Handle blocked user or other auth errors
+        if (error.response?.data?.action === 'LOGOUT') {
+            Cookies.remove('token');
+            Cookies.remove('refreshToken');
+            Cookies.remove('user');
+            window.location.href = '/login';
+        }
+
+        return Promise.reject(error);
+    }
+);
+
+
+
 export const authService = {
     login: async (credentials) => {
         const response = await api.post('/auth/login', credentials);
         // Set cookie with optional configuration
-        Cookies.set('token', response.data.accessToken, {
-            expires: 7, // expires in 7 days
-            secure: import.meta.env.MODE === 'production',
-            sameSite: 'strict', // protect against CSRF
-            path: '/' // accessible across all pages
-        });
-        console.log('Token set:', Cookies.get('token'));
+        // Cookies.set('token', response.data.accessToken, {
+        //     expires: 7, // expires in 7 days
+        //     secure: import.meta.env.MODE === 'production',
+        //     sameSite: 'strict', // protect against CSRF
+        //     path: '/' // accessible across all pages
+        // });
+        // console.log('Token set:', Cookies.get('token'));
+        const { accessToken } = response.data;
+
+        console.log('Access Token:', accessToken);
+
         return response.data;
     },
     sendOTP: async (formData) => {
@@ -55,9 +104,17 @@ export const authService = {
         const response = await api.post('/auth/verify', userData); // Adjust route if needed
         return response.data;
     },
+    verifyForgotPasswordOTP: async (userData) => {
+        const response = await api.post('/auth/forgot-Password', userData);
+        return response.data;
+    },
     resendOTP: async (email) => {
         const response = await api.post('/auth/resendOTP', {email});
-        return response.data
+        return response.data;
+    },
+    changePassword: async (userData) => {
+        const response = await api.post('/auth/change-password', {userData});
+        return response.data;
     },
     UpdatePicture: async ({imageUrl}) => {
         try {
@@ -167,6 +224,10 @@ export const authService = {
             console.error("Google authentication failed:", error);
             throw error;
         }
+    },
+    refreshToken: async () => {
+        const response = api.post('/auth/refresh', {});
+        return response.data;
     }
 };
 
@@ -174,6 +235,7 @@ export const authService = {
 export const listingService = {
     addListing: async (listingData) => {
         try {
+            console.log('listing',listingData);
             const response = await api.post('/auth/addListing', listingData);
             return response.data;
         } catch (error) {
@@ -192,11 +254,20 @@ export const listingService = {
     },
     getListingById: async (id) => {
         try {
-            console.log('id:',id);
             const response = await api.get(`/auth/listings/${id}`);
             return response.data;
         } catch (error) {
             console.error('Error getting listing:', error);
+            throw error;
+        }
+    },
+    getListingsByUser: async () => {
+        try {
+            const response = await api.get('/auth/mylistings');
+            console.log('rep',response.data);
+            return response.data
+        } catch (error) {
+            console.error('error fetching the list', error);
             throw error;
         }
     },
@@ -235,6 +306,60 @@ export const listingService = {
             console.error('Error deleting listing:', error);
             throw error;
         }
+    },
+    placeBid: async (id, amount) => {
+        try {
+            const response = await api.post(`/auth/listings/${id}/bid`,{amount});
+            return response.data;
+        } catch (error) {
+            console.error('Error placing bid', error)
+        }
+    },
+    getBidsByListing: async (listingId) => {
+        try {
+            const response = await api.get(`/auth/listings/${listingId}/bids`);
+            return response.data
+        } catch (error) {
+            console.error('Error fetching bids', error);
+        }
+    },
+    getBidsByUser: async () => {
+        try {
+            const response = await api.get('/auth/mybids');
+            console.log('resp',response.data.data);
+            return response.data;
+        } catch (error) {
+            console.error('Error while fetching list', error);
+        }
+    }
+};
+
+
+export const orderService = {
+    createOrder: async (orderData) => {
+        console.log('api:',orderData);
+      const response = await api.post('/auth/order/create', orderData);
+      return response.data;
+    },
+    getOrder: async (orderId) => {
+      const response = await api.get(`/auth/order/${orderId}`);
+      return response.data;
+    },
+    getUserOrders: async () => {
+      const response = await api.get('/auth/order');
+      return response.data;
+    },
+    getAllOrders: async () => {
+        const response = await api.get('/auth/orders');
+        return response.data;
+    },
+    updateOrderStatus: async (orderId, newStatus) => {
+        const response = await api.put(`/auth/orders/${orderId}/status`, { status: newStatus });
+        return response.data;
+    },
+    updatePaymentStatus: async (orderId, newStatus) => {
+        const response = await api.put(`/auth/orders/${orderId}/payment-status`, { status: newStatus });
+        return response.data;
     }
 };
 
@@ -250,8 +375,13 @@ export const categoryService = {
         return response.data;
     },
     
-    updateCategory: async (id, categoryData) => {
+    updateCategoryStatus: async (id, categoryData) => {
         const response = await api.put(`/auth/categories/${id}`, categoryData);
+        return response.data;
+    },
+
+    updateCategory: async (id, categoryData) => {
+        const response = await api.put(`/auth/categories/${id}/name`, categoryData);
         return response.data;
     },
     
@@ -265,11 +395,18 @@ export const categoryService = {
         return response.data;
     },
     
-    updateSubcategory: async (categoryId, subcategoryId, status) => {
-        console.log('api:',subcategoryId);
+    updateSubcategoryStatus: async (categoryId, subcategoryId, status) => {
         const response = await api.put(
             `/auth/categories/${categoryId}/subcategories/${subcategoryId}`,
             status
+        );
+        return response.data;
+    },
+
+    updateSubCategory: async (categoryId, subcategoryId, subcategoryData) => {
+        const response = await api.put(
+            `/auth/categories/${categoryId}/subcategories/${subcategoryId}/name`,
+            subcategoryData
         );
         return response.data;
     },
@@ -302,15 +439,6 @@ export const profileServices = {
             throw error;
         }
     },
-    updateAddress: async (addressData) => {
-        try {
-            const response = await api.put('/auth/users/address', addressData);
-            return response.data;
-        } catch (error) {
-            console.error('Error updating address:', error);
-            throw error;
-        }
-    },
     updateProfilePicture: async (imageUrl) => {
         try {
             const response = await api.put('/auth/users/profile-picture', { imageUrl });
@@ -320,6 +448,141 @@ export const profileServices = {
             throw error;
         }
     },
+    getKYC: async (userId) => {
+        try {
+            const response = await api.get(`/auth/kyc/${userId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching kyc',error)
+        }
+    }
+}
+
+export const KYCService  = {
+    getAllDocuments: async () =>{
+        try {
+            const response = await api.get('/auth/documents');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching kyc', error)
+        }
+    },
+    searchKYCDocuments: async (query) => {
+        try {
+            const response = await api.get(`/auth/documents/search?q=${query}`);
+            return response.data
+        } catch (error) {
+            console.error('Error searching', error)
+        }
+    }
+}
+
+
+export const wishlistService = {
+    getWishlist: async (userId) => {
+        try {
+            const response = await api.get(`/auth/wishlist/${userId}`);
+            return response;
+        } catch (error) {
+            console.error('Error fetching wishlist:', error);
+            throw error;
+        }
+    },
+    addItemToWishlist: async (itemId) => {
+        try {
+            const response = await api.post('/auth/wishlist', {item: itemId});
+            return response;
+        } catch (error) {
+            console.error('Error adding item to wishlist:', error);
+            throw error;
+        }
+    },
+    removeItemFromWishlist: async (itemId) => {
+        try {
+            console.log('iteminapi:', itemId);
+            const response = await api.delete(`/auth/wishlist/${itemId}`);
+            return response;
+        } catch (error) {
+            console.error('Error removing item from wishlist:', error);
+            throw error;
+        }
+    },    
+}
+
+
+export const cartService = {
+    getCart: async (userId) => {
+        try {
+            const response = await api.get(`/auth/cart/${userId}`);
+            return response.data;
+        } catch (err) {
+            console.error('Error fetching cart', err);
+            throw err;
+        }
+    },
+    addItemToCart: async (itemId) => {
+        try {
+            const response = await api.post('/auth/cart', {item: itemId});
+            return response.data;
+        } catch(error) {
+            console.error('Error adding item to cart');
+            throw error;
+        }
+    },
+    removeItemFromCart: async (itemId) => {
+        try {
+            const response = await api.delete(`/auth/cart/${itemId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Error removing item from cart', error);
+            throw error;
+        }
+    },
+    clearCart: async () =>{
+        try{
+            const response =  await api.delete('auth/cart/clear');
+            return response.data;
+        } catch (error) {
+            console.error('failed to clear cart', error);
+            throw error;
+        }
+    }
+}
+
+export const addressService = {
+    getAddress: async (userId) => {
+        try {
+            const response = await api.get(`/auth/address/${userId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching address')
+        }
+    },
+    addAddress: async (addressData) => {
+        try {
+            console.log('api:',addressData);
+            const response = await api.post('/auth/address', addressData);
+            return response.data;
+        } catch (error) {
+            console.error('Error adding address', error);
+        }
+    },
+    editAddress: async (addressId, addressData) => {
+        try {
+            const response = await api.put(`/auth/address/${addressId}`, addressData);
+            return response.data;
+        } catch (error) {
+            console.error('Error editing address', error);
+        }
+    },
+    removeAddess: async (addressId) => {
+        try {
+            const response = await api.delete(`/auth/address/${addressId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Error deleting address', error);
+        }
+    }
 }
 
 
@@ -344,7 +607,25 @@ export const adminServices = {
         const response = await api.get(`/auth/users/search?q=${query}`);
         return response.data;
     },
+    fetchAllActivity: async ()=> {
+        const response = await api.get('/auth/activity-log');
+        return response.data;
+    }
 }
 
+export const notificationService = {
+    fetchNotification: async () => {
+        const response = await api.get('/auth/notifications/unread');
+        return response.data;
+    },
+    markAsRead: async (notifcationId)=> {
+        const response = await api.post(`/auth/notifications/${notifcationId}/mark-read`);
+        return response.data;
+    },
+    markAllAsRead: async () => {
+        const response = await api.post('/auth/notifications/mark-all-read');
+        return response.data;
+    }
+}
 
 export default api;

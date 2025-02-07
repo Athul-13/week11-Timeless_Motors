@@ -6,7 +6,9 @@ import {
     Image,
     ShoppingCart,
     Grid,
-    MessagesSquare
+    MessagesSquare,
+    UserRoundCog,
+    FileClock
   } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
@@ -14,6 +16,8 @@ const AdminSideBar = () => {
     const menuItems = [
         { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/admin/dashboard' },
         { icon: <Users size={20} />, label: 'Users', path: '/admin/users' },
+        { icon: <UserRoundCog size={20}/>, label: 'KYC Verification', path: '/admin/kyc' },
+        { icon: <FileClock size={20}/>, label: 'User Activity', path: '/admin/activity-log'},
         { icon: <Bell size={20} />, label: 'Notifications', path: '/admin/notifications' },
         { icon: <Gavel size={20} />, label: 'Auction management', path: '/admin/auctions' },
         { icon: <Image size={20} />, label: 'Banner Management', path: '/admin/banners' },

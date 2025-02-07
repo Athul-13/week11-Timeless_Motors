@@ -47,9 +47,7 @@ const AdminAddListingForm = () => {
       }
 
       try {
-        console.log('Loading listing with ID:', listingId);
         const listing = await listingService.getListingById(listingId);
-        console.log('Received listing data:', listing);
         dispatch(setFormData(listing.data));
         toast.success(
           <div className="flex items-center gap-2">

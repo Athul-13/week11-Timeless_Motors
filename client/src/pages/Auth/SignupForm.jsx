@@ -6,10 +6,12 @@ import toast, { Toaster } from 'react-hot-toast';
 import { GoogleLogin } from '@react-oauth/google';
 import { useDispatch } from "react-redux";
 import { setCredentials } from "../../redux/authSlice";
+import { signupSchema, useFormValidation } from "../../utils/validationSchema";
 
 
 const SignupForm = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -18,6 +20,8 @@ const SignupForm = () => {
     password: '',
     termsAccepted: false
   });
+
+  const { errors, validateField, validateForm } = useFormValidation(signupSchema);
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -28,43 +32,36 @@ const SignupForm = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === "checkbox" ? checked : value, // Update for checkbox
-    });
+    const fieldValue = type === "checkbox" ? checked : value;
+    
+    const errorMessage = validateField(name, fieldValue);
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: fieldValue
+    }));
   };
   
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const trimmedPassword = formData.password.trim();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    setIsSubmitting(true);
 
-    if (!formData.first_name || !formData.last_name || !formData.phone_no || !formData.email || !trimmedPassword) {
-      toast.error('All fields are required');
-      return;
-    }
+    console.log('form', formData);
+    if(validateForm(formData)) {
+      try {
+        const otpResponse = await authService.sendOTP(formData);
 
-    if (!emailRegex.test(formData.email)) {
-        toast.error('Please enter a valid email address');
-        return;
-    }
-
-    if (!formData.termsAccepted) { // Check if the checkbox is ticked
-      toast.error('You must accept the Terms and Conditions to sign up');
-      return;
-    }
-
-    try {
-      const otpResponse = await authService.sendOTP(formData);
-
-      if(otpResponse.success) {
-        localStorage.setItem('signupData', JSON.stringify(formData));
+        if(otpResponse.success) {
+          localStorage.setItem('signupData', JSON.stringify(formData));
+        }
+        
+        navigate('/verifyOTP');
+      } catch (error) {
+        console.error('signup error:', error)
+        toast.error(error.response?.data?.message || 'Failed to send OTP')
+      } finally {
+        setIsSubmitting(false);
       }
-      
-      navigate('/verifyOTP');
-    } catch (error) {
-      console.error('signup error:', error)
-      toast.error(error.response?.data?.message || 'Failed to send OTP')
     }
   };
 
@@ -181,8 +178,13 @@ const SignupForm = () => {
               value={formData.first_name}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-800"
+              className={`w-full px-4 py-2 border ${
+                  errors.first_name ? 'border-red-500' : 'border-gray-300'
+                } rounded focus:outline-none focus:ring-2 focus:ring-gray-800`}
             />
+            {errors.first_name && (
+              <p className="text-red-500 text-sm mt-1">{errors.first_name}</p>
+            )}
 
             {/* Last Name */}
             <input
@@ -193,8 +195,13 @@ const SignupForm = () => {
               value={formData.last_name}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-800"
+              className={`w-full px-4 py-2 border ${
+                errors.last_name ? 'border-red-500' : 'border-gray-300'
+              } rounded focus:outline-none focus:ring-2 focus:ring-gray-800`}
             />
+            {errors.last_name && (
+              <p className="text-red-500 text-sm mt-1">{errors.last_name}</p>
+            )}
 
             {/* Phone Number */}
             <input
@@ -205,8 +212,13 @@ const SignupForm = () => {
               value={formData.phone_no}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-800"
+              className={`w-full px-4 py-2 border ${
+                errors.phone_no ? 'border-red-500' : 'border-gray-300'
+              } rounded focus:outline-none focus:ring-2 focus:ring-gray-800`}
             />
+            {errors.phone_no && (
+              <p className="text-red-500 text-sm mt-1">{errors.phone_no}</p>
+            )}
 
             {/* Email Address */}
             <input
@@ -216,8 +228,13 @@ const SignupForm = () => {
               placeholder="Email Address*"
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-800"
+              className={`w-full px-4 py-2 border ${
+                errors.email ? 'border-red-500' : 'border-gray-300'
+              } rounded focus:outline-none focus:ring-2 focus:ring-gray-800`}
             />
+            {errors.email && (
+              <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+            )}
 
             {/* Password */}
             <div className="relative">
@@ -228,8 +245,13 @@ const SignupForm = () => {
                 placeholder="Password*"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-800"
+                className={`w-full px-4 py-2 border ${
+                  errors.password ? 'border-red-500' : 'border-gray-300'
+                } rounded focus:outline-none focus:ring-2 focus:ring-gray-800`}
               />
+              {errors.password && (
+                <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+              )}
               <button
                 type="button"
                 onClick={togglePasswordVisibility}
@@ -244,20 +266,40 @@ const SignupForm = () => {
 
             {/* Terms and Conditions */}
             <div className="flex items-center space-x-2">
-              <input type="checkbox" id="terms" name="termsAccepted" checked={formData.termsAccepted} onChange={handleChange} className="w-5 h-5 text-gray-800 border-gray-300 rounded" />
+              <input 
+                type="checkbox" 
+                id="terms" 
+                name="termsAccepted" 
+                checked={formData.termsAccepted} 
+                onChange={handleChange} 
+                className="w-5 h-5 text-gray-800 border-gray-300 rounded" 
+              />
               <label htmlFor="terms" className="text-sm text-gray-600">
                 I have read and agree to the{" "}
                 <span className="font-bold">Terms and Conditions</span> and{" "}
                 <span className="font-bold">Privacy Policy</span>.
               </label>
             </div>
+            {errors.termsAccepted && (
+              <p className="text-red-500 text-sm mt-1">{errors.termsAccepted}</p>
+            )}
 
             {/* Sign-Up Button */}
             <button
               type="submit"
+              disabled={isSubmitting} // Disable the button while submitting
               className="w-full py-2 bg-gray-800 text-white font-bold rounded hover:bg-gray-700 transition-colors"
             >
-              Sign Up
+              {isSubmitting ? (
+                <>
+                  <div className="flex items-center justify-center">
+                  <div className="spinner-border animate-spin w-4 h-4 border-t-2 border-white rounded-full" />
+                    <span className="ml-2">Signing in...</span>
+                  </div>
+                </>
+              ) : (
+                'Sign Up'
+              )}
             </button>
           </div>
         </form>

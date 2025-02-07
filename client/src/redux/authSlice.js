@@ -1,46 +1,19 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import Cookies from 'js-cookie';
-
-// Helper function to clear all auth-related cookies
-const clearAllAuthCookies = () => {
-  // Get all cookies
-  const cookies = Cookies.get();
-  
-  // Get current domain
-  const domain = window.location.hostname;
-  const paths = ['/', '/api', '/auth'];
-  
-  // Clear cookies across all paths
-  paths.forEach(path => {
-    // Clear your app's auth cookies
-    Cookies.remove('token', { path, domain });
-    Cookies.remove('user', { path, domain });
-    
-    // Clear Google auth cookies
-    Cookies.remove('g_state', { path, domain });
-    
-    // Clear other potential auth cookies
-    Object.keys(cookies).forEach(cookieName => {
-      if (cookieName.startsWith('g_') || 
-          cookieName.includes('google') || 
-          cookieName.includes('auth') ||
-          cookieName.includes('token')) {
-        Cookies.remove(cookieName, { path, domain });
-      }
-    });
-  });
-
-  // Clear cookies on base domain and subdomains
-  Cookies.remove('token', { domain: `.${domain}` });
-  Cookies.remove('user', { domain: `.${domain}` });
-};
+import { setAuthCookie, clearAuthCookies } from '../utils/cookies';
+import { authService } from "../utils/api";
 
 const initialState = {
     user: null,
     token: null,
-    refreshToken: null,
     isAuthenticated: false,
     isAdmin: false,
+};
+
+// Helper function to check token expiry
+const isTokenExpired = (token) => {
+    const payload = JSON.parse(atob(token.split('.')[1])); // Decode JWT payload
+    return payload.exp * 1000 < Date.now();
 };
 
 // Load initial state from cookies
@@ -53,14 +26,16 @@ const loadFromCookies = () => {
             const parsedUser = JSON.parse(user);
             initialState.user = {
                 ...parsedUser,
-                profile_picture: parsedUser.profile_picture || null
+                profile_picture: parsedUser.profile_picture || null,
             };
             initialState.isAuthenticated = true;
             initialState.isAdmin = parsedUser.role === 'admin';
         }
 
-        if (token) {
+        if (token && !isTokenExpired(token)) {
             initialState.token = token;
+        } else {
+            clearAuthCookies(); // Clear expired token
         }
     } catch (error) {
         console.error("Error loading from cookies:", error);
@@ -69,38 +44,47 @@ const loadFromCookies = () => {
 
 loadFromCookies();
 
-// Create async thunk for setting credentials
+// Async thunk for setting credentials
 export const setCredentials = createAsyncThunk(
     'auth/setCredentials',
-    async (credentials) => {
-        const { token, user } = credentials;
-        
-        // Set token cookie
-        if (token) {
-            console.log('Setting token in cookie:', token);
-            Cookies.set('token', token, {
-                expires: 7,
-                secure: import.meta.env.MODE === 'production',
-                sameSite: 'strict',
-                path: '/'
-            });
-            
-            // Verify cookie was set
-            const savedToken = Cookies.get('token');
-            console.log('Verified saved token:', savedToken);
-        }
+    async (credentials, { rejectWithValue }) => {
+        try {
+            const { token, user } = credentials;
 
-        // Set user cookie
-        if (user) {
-            Cookies.set('user', JSON.stringify(user), {
-                expires: 7,
-                secure: import.meta.env.MODE === 'production',
-                sameSite: 'strict',
-                path: '/'
-            });
-        }
+            // Set token in cookie
+            if (token) {
+                setAuthCookie('token', token);
+            }
 
-        return credentials;
+            // Set user in cookie
+            if (user) {
+                setAuthCookie('user', JSON.stringify(user));
+            }
+
+            return credentials;
+        } catch (error) {
+            console.error('Error setting credentials:', error);
+            return rejectWithValue('Failed to set credentials');
+        }
+    }
+);
+
+// Async thunk for refreshing access tokens
+export const refreshAccessToken = createAsyncThunk(
+    'auth/refreshAccessToken',
+    async (_, { dispatch, rejectWithValue }) => {
+        try {
+            const response = await authService.refreshToken({});
+            const { accessToken } = response.data;
+
+            setAuthCookie('token', accessToken);
+            dispatch(setCredentials({ token: accessToken }));
+
+            return accessToken;
+        } catch (error) {
+            console.error('Failed to refresh token:', error);
+            return rejectWithValue('Failed to refresh token');
+        }
     }
 );
 
@@ -111,67 +95,54 @@ const authSlice = createSlice({
         logout: (state) => {
             state.user = null;
             state.token = null;
-            state.refreshToken = null;
             state.isAuthenticated = false;
             state.isAdmin = false;
 
-            clearAllAuthCookies();
+            clearAuthCookies();
 
-            // Clean up Google Auth if it exists
-            if (window.google?.accounts?.id) {
-                window.google.accounts.id.disableAutoSelect();
-            }
-
-            // Clear any local/session storage
+            // Clean up local/session storage
             localStorage.removeItem('user');
             sessionStorage.clear();
 
             console.log('Successfully logged out and cleared all auth data');
         },
         updateUser: (state, action) => {
-            // Merge the new user data with existing user data
+            // Update user data
             state.user = { 
                 ...state.user, 
-                ...action.payload 
+                ...action.payload,
             };
 
-            // Update user cookie to persist changes
+            // Update user cookie
             if (state.user) {
-                Cookies.set('user', JSON.stringify(state.user), {
-                    expires: 7,
-                    secure: import.meta.env.MODE === 'production',
-                    sameSite: 'strict',
-                    path: '/'
-                });
+                setAuthCookie('user', JSON.stringify(state.user));
             }
         },
     },
     extraReducers: (builder) => {
         builder
-            .addCase(setCredentials.pending, (state) => {
-                console.log('Setting credentials...');
-            })
             .addCase(setCredentials.fulfilled, (state, action) => {
                 const { token, user } = action.payload;
                 state.token = token;
                 state.user = {
                     ...user,
-                    profilePicture: user.profilePicture || null
+                    profilePicture: user.profilePicture || null,
                 };
                 state.isAuthenticated = true;
-                state.isAdmin = user && user.role === 'admin';
+                state.isAdmin = user.role === 'admin';
 
                 console.log('Auth state updated:', {
                     isAuthenticated: true,
                     isAdmin: user.role === 'admin',
-                    hasToken: !!token,
-                    tokenValue: token
                 });
             })
-            .addCase(setCredentials.rejected, (state, action) => {
-                console.error('Failed to set credentials:', action.error);
+            .addCase(refreshAccessToken.fulfilled, (state, action) => {
+                state.token = action.payload;
+            })
+            .addCase(refreshAccessToken.rejected, () => {
+                console.warn('Failed to refresh access token');
             });
-    }
+    },
 });
 
 export const { logout, updateUser } = authSlice.actions;

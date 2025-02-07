@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { Edit, Eye, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import {
@@ -16,10 +17,14 @@ const AuctionManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showDeleted, setShowDeleted] = useState(false);
+  const currentUser = useSelector(state => state.auth.user.id);
 
   const navigate = useNavigate();
 
   useEffect(() => {
+    setTimeout(()=> {
+      setLoading(false);
+    },500);
     fetchListings();
   }, [showDeleted]);
 
@@ -34,8 +39,6 @@ const AuctionManagement = () => {
       const errorMessage = error.response?.data?.message || 'Failed to fetch listings';
       setError(errorMessage);
       toast.error(errorMessage);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -194,17 +197,34 @@ const AuctionManagement = () => {
     {
       accessorKey: 'duration',
       header: 'Duration',
-      cell: ({ row }) => (
-        <div>
-          <div className="flex items-center gap-1">
-            <Clock className="w-4 h-4" />
-            {getRemainingTime(row.original.end_date)}
+      cell: ({ row }) => {
+        const startDate = row.original.start_date;
+        const endDate = row.original.end_date;
+    
+        // Check if the dates are valid
+        const isValidStartDate = startDate && !isNaN(new Date(startDate).getTime());
+        const isValidEndDate = endDate && !isNaN(new Date(endDate).getTime());
+    
+        return (
+          <div>
+            <div className="flex items-center gap-1">
+              <Clock className="w-4 h-4" />
+              {isValidStartDate && isValidEndDate ? (
+                getRemainingTime(endDate)
+              ) : (
+                <span className="text-red-500">--</span> // or some other fallback
+              )}
+            </div>
+            <div className="text-xs text-gray-500">
+              {isValidStartDate && isValidEndDate ? (
+                `${formatDate(startDate)} to ${formatDate(endDate)}`
+              ) : (
+                <span className="text-gray-600">No dates available</span> // or some other fallback
+              )}
+            </div>
           </div>
-          <div className="text-xs text-gray-500">
-            {formatDate(row.original.start_date)} to {formatDate(row.original.end_date)}
-          </div>
-        </div>
-      )
+        );
+      }
     },
     {
       accessorKey: 'approval',
@@ -227,22 +247,29 @@ const AuctionManagement = () => {
     {
       accessorKey: 'actions',
       header: 'Actions',
-      cell: ({ row }) => (
-        <div className="flex space-x-2">
-          <button 
-            className="p-2 text-blue-600 hover:text-blue-800"
-            onClick={() => navigate(`/admin/auctions/listings/${row.original._id}`)}
-          >
-            <Eye className="h-4 w-4" />
-          </button>
-          <button 
-            className="p-2 text-blue-600 hover:text-blue-800"
-            onClick={() => handleEdit(row.original._id)}
-          >
-            <Edit className="h-4 w-4" />
-          </button>
-        </div>
-      )
+      cell: ({ row }) => {
+
+        const isOwner = currentUser === row.original.seller_id._id;
+    
+        return (
+          <div className="flex space-x-2">
+            <button 
+              className="p-2 text-blue-600 hover:text-blue-800"
+              onClick={() => navigate(`/admin/auctions/listings/${row.original._id}`)}
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+            {isOwner && (
+              <button 
+                className="p-2 text-blue-600 hover:text-blue-800"
+                onClick={() => handleEdit(row.original._id)}
+              >
+                <Edit className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        );
+      }
     }
   ], [navigate]);
 
@@ -262,10 +289,8 @@ const AuctionManagement = () => {
 
   if (loading) {
     return (
-      <div className="relative m-10">
-        <div className="w-full h-48 flex items-center justify-center">
-          <div className="text-gray-500">Loading listings...</div>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
       </div>
     );
   }

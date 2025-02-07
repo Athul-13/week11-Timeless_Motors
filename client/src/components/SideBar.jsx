@@ -7,6 +7,7 @@ const Sidebar = () => {
     { name: "My Listings", path: "/profile/myListings" },
     { name: "My Bids", path: "/profile/myBids" },
     { name: "Past Orders", path: "/profile/pastOrders" },
+    { name: "Inbox", path: "/profile/inbox" },
   ];
 
   return (

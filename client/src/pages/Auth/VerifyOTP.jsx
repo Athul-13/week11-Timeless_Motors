@@ -89,49 +89,7 @@ export default function VerifyOTP () {
     return (
         <>
 
-            <Toaster 
-            position="top-center" 
-            toastOptions={{
-                success: {
-                style: {
-                    background: '#4BB543', 
-                    color: '#FFFFFF',
-                    borderRadius: '4px',
-                    padding: '16px 24px',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)' 
-                },
-                icon: '✔',               
-                duration: 3000,          
-                // Add progress bar to success
-                progress: {
-                    duration: 3000, 
-                    style: {
-                    backgroundColor: '#FFFFFF', 
-                    height: '4px' 
-                    }
-                }
-                },
-                error: {
-                style: {
-                    background: '#FF3333',
-                    color: '#FFFFFF',
-                    borderRadius: '4px',
-                    padding: '16px 24px',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)' 
-                },
-                icon: '✖',
-                duration: 3000,          
-                // Add progress bar to error         
-                progress: {
-                    duration: 3000,
-                    style: {
-                    backgroundColor: '#FFFFFF',
-                    height: '4px' 
-                    }
-                } 
-                }
-            }}
-            /> 
+            <Toaster position="top-center" />
 
             {/* Header */}
             <header className="bg-gray-200 w-full py-4 text-center">

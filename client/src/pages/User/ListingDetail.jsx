@@ -6,6 +6,11 @@ import { listingService } from '../../utils/api';
 import toast, { Toaster } from 'react-hot-toast';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
+import { useDispatch, useSelector } from 'react-redux';
+import { addToWishlistAsync, fetchWishlist, removeFromWishlistAsync } from '../../redux/wishlistSlice';
+import { addToCart, fetchCart, removeFromCart } from '../../redux/cartSlice';
+import { useSocket } from '../../utils/socketContext';
+import Cookies from 'js-cookie';
 
 const ListingDetail = () => {
   const [listing, setListing] = useState(null);
@@ -16,8 +21,14 @@ const ListingDetail = () => {
   const [isZoomed, setIsZoomed] = useState(false);
   const [showEndedDialog, setShowEndedDialog] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [isInCart, setIsInCart] = useState(false);
+  const [message, setMessage] = useState('');
+  const [socketReady, setSocketReady] = useState(false);
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const socket = useSocket();
   const { id } = useParams();
+  const userId = useSelector((state) => state.auth.user.id);
 
   useEffect(() => {
     const fetchListing = async () => {
@@ -48,10 +59,83 @@ const ListingDetail = () => {
       }
     };
 
+    const checkIfWishlisted = async () => {
+      try {
+        const resultAction = await dispatch(fetchWishlist());
+        
+        if (fetchWishlist.fulfilled.match(resultAction)) {
+          const wishlistResponse = resultAction.payload;
+    
+          if (Array.isArray(wishlistResponse) && wishlistResponse.length > 0) {
+            const items = wishlistResponse[0].items;
+
+            console.log('item:', items);
+    
+            const isProductInWishlist = items.some(item => item.product._id.toString() === id);
+            setIsWishlisted(isProductInWishlist);
+          } else {
+            console.error('Wishlist response is empty or not an array:', wishlistResponse);
+          }
+        } else {
+          console.error('Error fetching wishlist:', resultAction.payload || 'Something went wrong');
+        }
+      } catch (err) {
+        console.error('Error fetching wishlist status:', err);
+      }
+    };
+
+    const checkIfInCart = async () => {
+      try {
+        const resultAction = await dispatch(fetchCart());
+
+        if (fetchCart.fulfilled.match(resultAction)) {
+          const cartItems = resultAction.payload;
+
+          if (cartItems && Array.isArray(cartItems)) {
+            // If response is an array of items directly
+            const isProductInCart = cartItems.some(item => 
+              item.product && item.product._id.toString() === id
+            );
+
+            setIsInCart(isProductInCart);
+          } else if (cartItems && Array.isArray(cartItems[0]?.items)) {
+            const isProductInCart = cartItems[0].items.some(item => 
+              item.product && item.product._id.toString() === id
+            );
+            setIsInCart(isProductInCart);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching cart:', error)
+      }
+    }
+
     if (id) {
       fetchListing();
+      checkIfWishlisted();
+      checkIfInCart();
     }
-  }, [id]);
+  }, [id,dispatch]);
+
+  useEffect(() => {
+    if (socket) {
+        setSocketReady(true);
+        socket.on('newMessage', (data) => {
+            console.log('Message sent successfully', data);
+            toast.success('Message sent to seller');
+        });
+
+        socket.on('messageError', (error) => {
+            console.error('Failed to send message:', error);
+            toast.error(error.message || 'Failed to send message');
+        });
+
+        return () => {
+            socket.off('newMessage');
+            socket.off('messageError');
+        };
+    }
+  }, [socket]);
 
   if (loading) {
     return (
@@ -132,12 +216,19 @@ const ListingDetail = () => {
 
   const handleAddToCart = async () => {
     try {
-      // Add your cart API logic here
-      // await cartService.addToCart(listing.id);
-      toast.success('Item added to cart successfully!');
+      if (isInCart) {
+        dispatch(removeFromCart(id));
+        toast.success('Removed from cart');
+      } else {
+        dispatch(addToCart(id));
+        toast.success('Added to cart')
+      }
+
+      setIsInCart((prev)=> !prev);
     } catch (err) {
       console.error('Error adding to cart:', err);
       toast.error('Failed to add item to cart');
+      setIsInCart((prev)=> !prev);
     }
   };
 
@@ -146,20 +237,29 @@ const ListingDetail = () => {
     const endDate = new Date(listing.end_date).getTime();
     
     if (now > endDate) {
-      setShowEndedDialog(true);
-      return;
+        setShowEndedDialog(true);
+        return;
     }
-    
+
+    const minBid = (listing.current_bid > 0 ? listing.current_bid : listing.starting_bid) + (listing.minimum_increment || 0);
+
+    if (bidAmount < minBid) {
+        toast.error(`Bid must be at least ₹${minBid}`);
+        return;
+    }
+
     try {
-      // Implement bid logic here
-      console.log('Placing bid:', bidAmount);
-      // await listingService.placeBid(id, bidAmount);
-      toast.success('Bid placed successfully!');
+        await listingService.placeBid(id, bidAmount);
+        toast.success('Bid placed successfully!');
+        setBidAmount('');
+
+        const response = await listingService.getListingById(id);
+        setListing(response.data);
     } catch (err) {
-      console.error('Error placing bid:', err);
-      toast.error('Failed to place bid');
+        console.error('Error placing bid:', err);
+        toast.error('Failed to place bid');
     }
-  };
+};
 
   const isAuctionEnded = () => {
     if (!listing.end_date) return false;
@@ -170,14 +270,19 @@ const ListingDetail = () => {
 
   const handleWishlist = async () => {
     try {
-      setIsWishlisted(!isWishlisted);
-      // Add API call to update wishlist status
-      // await wishlistService.toggleWishlist(id);
-      toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist');
+      if (isWishlisted) {
+        dispatch(removeFromWishlistAsync(id));
+        toast.success('Removed from wishlist');
+      } else {
+        dispatch(addToWishlistAsync(id));
+        toast.success('Added to wishlist');
+      }
+  
+      setIsWishlisted((prev) => !prev);  // Safely flip the state
     } catch (err) {
       console.error('Error updating wishlist:', err);
       toast.error('Failed to update wishlist');
-      setIsWishlisted(!isWishlisted); // Revert state on error
+      setIsWishlisted((prev) => !prev); // Flip back if there's an error
     }
   };
 
@@ -198,6 +303,39 @@ const ListingDetail = () => {
     const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     return `${days}d ${hours}h left`;
   };
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+
+    if (!message.trim()) {
+        return;
+    }
+
+    if (!socketReady) {
+        toast.error('Chat connection not ready. Please try again in a moment.');
+        return;
+    }
+
+    if (!socket?.connected) {
+        toast.error('Chat connection failed. Please try again.');
+        return;
+    }
+
+    // Check if user is logged in
+    if (!userId) {
+        toast.error('Please login to send messages');
+        navigate('/login');
+        return;
+    }
+
+    socket.emit('sendInitialMessage', {
+        sellerId: listing.seller_id._id,
+        listingId: listing._id,
+        message: message.trim(),
+    });
+
+    setMessage('');
+};
 
   return (
     <>
@@ -318,7 +456,7 @@ const ListingDetail = () => {
                 <Heart 
                   className={`w-6 h-6 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`}
                 />
-                Add to Wishlist
+                {isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}
               </button>
             </div>
 
@@ -354,7 +492,10 @@ const ListingDetail = () => {
                       value={bidAmount}
                       onChange={(e) => setBidAmount(e.target.value)}
                       className="flex-1 px-4 py-2 border rounded-lg"
-                      placeholder={`Min bid: ₹${formatPrice(listing.current_bid + (listing.minimum_increment || 0))}`}
+                      placeholder={`Min bid: ₹${formatPrice(
+                        (listing.current_bid > 0 ? listing.current_bid : listing.starting_bid) +
+                        (listing.minimum_increment || 0)
+                      )}`}
                     />
                     <button
                       onClick={handleBid}
@@ -376,10 +517,29 @@ const ListingDetail = () => {
                   className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                 >
                   <ShoppingCart className="w-5 h-5" />
-                  Add to Cart
+                  {isInCart ? 'Remove from Cart' : 'Add to Cart'}
                 </button>
               </div>
             )}
+          </div>
+
+          <div className='mt-8'>
+          <h2 className="text-xl font-semibold mb-4">Have a question?</h2>
+          <form onSubmit={handleSendMessage} className="flex gap-2">
+                <input
+                    type="text"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Type your question..."
+                    className="flex-1 p-2 border rounded"
+                />
+                <button 
+                    type="submit"
+                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                    Send
+                </button>
+            </form>
           </div>
             
 

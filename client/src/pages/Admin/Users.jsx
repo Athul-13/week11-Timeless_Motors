@@ -2,22 +2,27 @@ import {
   flexRender,
   getCoreRowModel,
   useReactTable,
+  getFilteredRowModel,
 } from '@tanstack/react-table';
 import { Check, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast, Toaster } from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAllUsers, updateUserStatus, searchUsers } from '../../redux/userSlice';
+import { fetchAllUsers, updateUserStatus } from '../../redux/userSlice';
 
 const Users = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [pendingStatuses, setPendingStatuses] = useState({});
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
+  const [loading, setLoading] = useState(true);
   const dispatch = useDispatch();
-  const { users, loading } = useSelector((state) => state.users);
+  const { users } = useSelector((state) => state.users);
 
   useEffect(() => {
+    setTimeout(()=>{
+      setLoading(false)
+    },500)
     dispatch(fetchAllUsers());
   }, [dispatch]);
 
@@ -26,10 +31,20 @@ const Users = () => {
       header: 'Name',
       accessorFn: (row) => `${row.first_name} ${row.last_name}`,
       cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+      // Add filtering for name
+      filterFn: (row, columnId, filterValue) => {
+        const value = row.getValue(columnId);
+        return value.toLowerCase().includes(filterValue.toLowerCase());
+      }
     },
     {
       header: 'Email',
       accessorKey: 'email',
+      // Add filtering for email
+      filterFn: (row, columnId, filterValue) => {
+        const value = row.getValue(columnId);
+        return value.toLowerCase().includes(filterValue.toLowerCase());
+      }
     },
     {
       header: 'Status',
@@ -105,22 +120,23 @@ const Users = () => {
   const table = useReactTable({
     data: users,
     columns,
+    state: {
+      globalFilter: searchQuery,
+    },
+    onGlobalFilterChange: setSearchQuery,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(), // Add filtered row model
+    globalFilterFn: (row, columnId, filterValue) => {
+      // Custom global filter to search across multiple columns
+      const searchLower = filterValue.toLowerCase();
+      return (
+        row.original.first_name.toLowerCase().includes(searchLower) ||
+        row.original.last_name.toLowerCase().includes(searchLower) ||
+        row.original.email.toLowerCase().includes(searchLower) ||
+        row.original.status.toLowerCase().includes(searchLower)
+      );
+    },
   });
-
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) {
-      dispatch(fetchAllUsers());
-      return;
-    }
-    try {
-      await dispatch(searchUsers(searchQuery)).unwrap();
-    } catch (err) {
-      toast.error('Search failed');
-      console.error(err)
-    }
-  };
 
   const handleStatusToggle = (userId, newStatus) => {
     setPendingAction({ userId, newStatus });
@@ -165,26 +181,20 @@ const Users = () => {
         </h2>
         
         <div className="flex items-center gap-4">
-          <form onSubmit={handleSearch} className="flex items-center">
-            <input
-              type="text"
-              placeholder="Search users..."
-              className="px-4 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <button 
-              type="submit" 
-              className="px-4 py-2 bg-gray-600 text-white rounded-r-lg hover:bg-gray-700 transition-colors"
-            >
-              Search
-            </button>
-          </form>
+          <input
+            type="text"
+            placeholder="Search users..."
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-4">Loading...</div>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
+        </div>
       ) : (
         <div className="rounded-md border border-gray-300">
           <table className="w-full table-auto">

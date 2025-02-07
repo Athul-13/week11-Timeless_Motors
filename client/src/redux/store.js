@@ -4,6 +4,9 @@ import authReducer from './authSlice';
 import listingReducer from './listingSlice';
 import profileReducer from './profileSlice';
 import usersReducer from "./userSlice"
+import wishlistReducer from "./wishlistSlice";
+import cartReducer from "./cartSlice";
+import addressReducer from "./addressSlice";
 
 export const store = configureStore({
     reducer: {
@@ -11,7 +14,10 @@ export const store = configureStore({
         listing: listingReducer,
         categories: categoryReducer,
         profile: profileReducer,
-        users: usersReducer
+        address: addressReducer,
+        users: usersReducer,
+        wishlist: wishlistReducer,
+        cart: cartReducer,
     },
 
     middleware: (getDefaultMiddleware) => 

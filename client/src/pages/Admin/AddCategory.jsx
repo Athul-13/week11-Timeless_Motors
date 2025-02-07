@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { createCategory, addSubcategory, fetchCategories } from '../../redux/categorySlice';
+import { createCategory, addSubcategory, fetchCategories, updateSubcategory, updateCategory } from '../../redux/categorySlice';
 import toast, { Toaster } from 'react-hot-toast';
 
 const AddCategory = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const { categoryId } = useParams();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -16,6 +17,7 @@ const AddCategory = () => {
 
   const [isSubcategory, setIsSubcategory] = useState(false);
   const [error, setError] = useState('');
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const categories = useSelector((state) => state.categories.categories)
 
@@ -23,42 +25,89 @@ const AddCategory = () => {
     dispatch(fetchCategories());
   },[dispatch]);
 
+  useEffect(() => {
+    if(categoryId) {
+      setIsEditMode(true);
+
+      let foundCategory = null;
+      let isSubcat = false;
+
+      foundCategory = categories.find(cat => cat._id === categoryId);
+
+      if (!foundCategory) {
+        for (const category of categories) {
+          const subcat = category.subCategories?.find(sub => sub._id === categoryId);
+          if (subcat) {
+            foundCategory = subcat;
+            isSubcat = true;
+            setFormData({
+              name: subcat.name,
+              status: !subcat.isDeleted,
+              parentCategoryId: category._id
+            });
+            break;
+          }
+        }
+      }  else {
+        setFormData({
+          name: foundCategory.name,
+          status: !foundCategory.isDeleted,
+          parentCategoryId: ''
+        });
+      }
+
+      setIsSubcategory(isSubcat);
+    }
+  },[categoryId, categories])
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Create a loading toast that we can dismiss later
     const loadingToast = toast.loading(
-      isSubcategory ? 'Creating subcategory...' : 'Creating category...'
+      `${isEditMode ? 'Updating' : 'Creating'} ${isSubcategory ? 'subcategory' : 'category'}...`
     );
 
     try {
-      if (isSubcategory) {
-        await dispatch(addSubcategory({
-          categoryId: formData.parentCategoryId,
-          subcategoryData: {
+      if (isEditMode) {
+        if (isSubcategory) {
+          await dispatch(updateSubcategory({
+            categoryId: formData.parentCategoryId,
+            subcategoryId: categoryId,
+            name: formData.name,
+            isDeleted: !formData.status
+          })).unwrap();
+        } else {
+          await dispatch(updateCategory({
+            id: categoryId,
+            name: formData.name
+          })).unwrap();
+        }
+      } else {
+        if (isSubcategory) {
+          await dispatch(addSubcategory({
+            categoryId: formData.parentCategoryId,
+            subcategoryData: {
+              name: formData.name,
+              status: formData.status
+            }
+          })).unwrap();
+        } else {
+          await dispatch(createCategory({
             name: formData.name,
             status: formData.status
-          }
-        })).unwrap();
-  
-      } else {
-        await dispatch(createCategory({
-          name: formData.name,
-          status: formData.status
-        })).unwrap();
+          })).unwrap();
+        }
       }
       
-      // Dismiss loading toast and show success
       toast.dismiss(loadingToast);
       toast.success(
-        isSubcategory 
-          ? 'Subcategory created successfully!' 
-          : 'Category created successfully!'
+        `${isSubcategory ? 'Subcategory' : 'Category'} ${isEditMode ? 'updated' : 'created'} successfully!`
       );
       
       navigate('/admin/categories');
     } catch (err) {
-      // Dismiss loading toast and show error
+      console.error('Full error:', err);
       toast.dismiss(loadingToast);
       toast.error(err.message || 'An error occurred while saving');
       setError(err.message || 'An error occurred while saving');
@@ -70,10 +119,14 @@ const AddCategory = () => {
       <Toaster position='top-center'/>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-800">
-          {isSubcategory ? 'Add New Subcategory' : 'Add New Category'}
+          {isEditMode ? (
+            isSubcategory ? 'Edit Subcategory' : 'Edit Category'
+          ) : (
+            isSubcategory ? 'Add New Subcategory' : 'Add New Category'
+          )}
         </h1>
         <p className="text-gray-600 mt-2">
-          Fill in the details below to create a new {isSubcategory ? 'subcategory' : 'category'}
+          Fill in the details below to {isEditMode ? 'update the' : 'create a new'} {isSubcategory ? 'subcategory' : 'category'}
         </p>
       </div>
 
@@ -84,31 +137,33 @@ const AddCategory = () => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Type
-          </label>
-          <div className="flex gap-4">
-            <label className="inline-flex items-center">
-              <input
-                type="radio"
-                checked={!isSubcategory}
-                onChange={() => setIsSubcategory(false)}
-                className="text-gray-600 focus:ring-gray-500"
-              />
-              <span className="ml-2">Main Category</span>
+      {!isEditMode && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Type
             </label>
-            <label className="inline-flex items-center">
-              <input
-                type="radio"
-                checked={isSubcategory}
-                onChange={() => setIsSubcategory(true)}
-                className="text-gray-600 focus:ring-gray-500"
-              />
-              <span className="ml-2">Subcategory</span>
-            </label>
+            <div className="flex gap-4">
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  checked={!isSubcategory}
+                  onChange={() => setIsSubcategory(false)}
+                  className="text-gray-600 focus:ring-gray-500"
+                />
+                <span className="ml-2">Main Category</span>
+              </label>
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  checked={isSubcategory}
+                  onChange={() => setIsSubcategory(true)}
+                  className="text-gray-600 focus:ring-gray-500"
+                />
+                <span className="ml-2">Subcategory</span>
+              </label>
+            </div>
           </div>
-        </div>
+        )}
 
         {isSubcategory && (
           <div>
@@ -123,6 +178,7 @@ const AddCategory = () => {
               })}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-500"
               required
+              disabled={isEditMode}
             >
               <option value="">Select parent category</option>
               {categories.map((category) => (
@@ -177,7 +233,7 @@ const AddCategory = () => {
             type="submit"
             className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
           >
-            Save
+            {isEditMode ? 'Save Changes' : 'Save'}
           </button>
         </div>
       </form>

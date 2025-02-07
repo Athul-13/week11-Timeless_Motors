@@ -62,7 +62,7 @@ const listingSchema = new mongoose.Schema(
     },
     status: { 
         type: String, 
-        enum: ['active', 'sold', 'pending start'], 
+        enum: ['active', 'sold', 'pending start', 'expired'], 
         default: 'active' 
     },
     bid_count: { 

@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import PrivateRoute from "./components/PrivateRoute";
+import AdminRoute from "./components/AdminRoute";
 import About from "./pages/About";
 import AddListingForm from "./pages/User/AddListingForm";
 import AddCategory from "./pages/Admin/AddCategory";
@@ -27,10 +28,23 @@ import UserDetails from "./pages/User/UserDetails";
 import VerifyOTP from "./pages/Auth/VerifyOTP";
 import ListingDetail from "./pages/User/ListingDetail";
 import ListingsDetails from "./pages/Admin/ListingDetails";
+import ForgotPassword from "./pages/Auth/FogotPassword";
+import ChangePassword from "./pages/Auth/ChangePassword";
+import Wishlist from "./pages/User/Wishlist";
+import Cart from "./pages/User/Cart";
+import AddListing from "./pages/User/Addlisting";
+import Checkout from "./pages/User/Checkout";
+import OrderConfirmation from "./pages/User/OrderConfirmation";
+import KYCVerification from "./pages/Admin/KYCVerification";
+import { SocketProvider } from "./utils/socketContext";
+import Inbox from "./pages/User/Inbox";
+import ActivityLog from "./pages/Admin/ActivityLog";
+
 
 
 export default function App () {
   return(
+    <SocketProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={
@@ -49,6 +63,14 @@ export default function App () {
           < VerifyOTP />
         } />
 
+        <Route path="/forgot-password" element={
+          < ForgotPassword />
+        } />
+
+        <Route path="/change-password" element={
+          <ChangePassword/>
+        } />
+
         <Route path="/homePage" element={
           <PrivateRoute>
             < HomePage />
@@ -64,7 +86,37 @@ export default function App () {
 
         <Route path="/addlisting" element={
           <PrivateRoute>
+            < AddListing />
+          </PrivateRoute>
+        } />
+
+        <Route path='/addlisting/new' element={
+          <PrivateRoute>
             < AddListingForm />
+          </PrivateRoute>
+        } />
+
+        <Route path="/wishlist" element={
+          <PrivateRoute>
+            < Wishlist />
+          </PrivateRoute>
+        } />
+
+        <Route path="/cart" element={
+          <PrivateRoute>
+            <Cart/>
+          </PrivateRoute>
+        } />
+
+        <Route path="/checkout" element={
+          <PrivateRoute>
+            < Checkout />
+          </PrivateRoute>
+        } />
+
+        <Route path="/orders/:orderId" element={
+          <PrivateRoute>
+            < OrderConfirmation />
           </PrivateRoute>
         } />
 
@@ -72,19 +124,31 @@ export default function App () {
           < About />
         } />
 
-        <Route path="/profile" element={< UserDetails />}>
+        <Route path="/profile" element={
+          <PrivateRoute>
+            < UserDetails />
+          </PrivateRoute>  
+        }>
           <Route index element={<Navigate to="profileDetails" replace />} />
           <Route path="profileDetails" element={< ProfileDetails />} />
           <Route path="payments" element={< Payments />} />
           <Route path="myListings" element={< MyListings />} />
+          <Route path="/profile/myListings/edit/:listingId" element={< AddListingForm />} />
           <Route path="myBids" element={< MyBids />} />
           <Route path="pastOrders" element={< PastOrders />} />
+          <Route path="inbox" element={< Inbox />} />
         </Route>
 
-        <Route path="/admin" element={< AdminDashboard />}>
+        <Route path="/admin" element={
+          <AdminRoute>
+            < AdminDashboard />
+          </AdminRoute>  
+        }>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={< Dashboard />} />
             <Route path="users" element={<Users />} />
+            <Route path="kyc" element={<KYCVerification />} />
+            <Route path="activity-log" element={< ActivityLog />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="auctions" element={<AuctionManagement />} />
             <Route path="/admin/auctions/new-listing" element={< AdminAddListing />} />
@@ -94,10 +158,12 @@ export default function App () {
             <Route path="orders" element={<Orders />} />
             <Route path="categories" element={<Categories />} />
             <Route path="/admin/categories/new-SubCategory" element={< AddCategory />} />
+            <Route path="/admin/categories/edit/:categoryId" element={< AddCategory />} />
             <Route path="support" element={<Support />} />
         </Route>
 
       </Routes>
     </BrowserRouter>
+    </SocketProvider>
   );
 }

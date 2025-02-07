@@ -83,7 +83,7 @@ exports.getAllCategories = async (req, res) => {
     }
 }
 
-exports.updateCategory = async (req, res) => {
+exports.updateCategoryStatus = async (req, res) => {
     try {
         const { categoryId } = req.params;
         const { name, isDeleted } = req.body;
@@ -122,12 +122,10 @@ exports.updateCategory = async (req, res) => {
     }
 };
 
-exports.updateSubcategory = async (req, res) => {
+exports.updateSubcategoryStatus = async (req, res) => {
     try {
         const { categoryId, subcategoryId } = req.params;
         const { name, isDeleted } = req.body;
-
-        console.log('back:', req.params)
 
         const category = await Category.findById(categoryId);
         if (!category) {
@@ -165,6 +163,62 @@ exports.updateSubcategory = async (req, res) => {
         });
     } catch (error) {
         return res.status(500).json({ message: error.message });
+    }
+};
+
+exports.updateCategory = async (req, res) => {
+    try {
+      const { categoryId } = req.params;
+      const { name } = req.body;
+  
+      const category = await Category.findById(categoryId);
+      if (!category) {
+        return res.status(404).json({ message: 'Category not found' });
+      }
+  
+      category.name = name;
+      await category.save();
+  
+      res.json({
+        success: true,
+        data: category
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  };
+
+  exports.updateSubcategory = async (req, res) => {
+    try {
+        console.log('bod:',req.body);
+      const { categoryId, subcategoryId } = req.params;
+      const { name } = req.body;
+  
+      const category = await Category.findById(categoryId);
+      if (!category) {
+        return res.status(404).json({ message: 'Category not found' });
+      }
+  
+      const subcategory = category.subCategories.id(subcategoryId);
+      if (!subcategory) {
+        return res.status(404).json({ message: 'Subcategory not found' });
+      }
+  
+      subcategory.name = name;
+      await category.save();
+  
+      res.json({
+        success: true,
+        data: category
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
     }
 };
 

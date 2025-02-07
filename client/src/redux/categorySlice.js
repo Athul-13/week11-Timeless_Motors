@@ -24,13 +24,24 @@ export const createCategory = createAsyncThunk(
     }
 );
 
-export const updateCategory = createAsyncThunk(
-    'categories/update',
+export const updateCategoryStatus = createAsyncThunk(
+    'categories/updateStatus',
     async ({ id, categoryData }, { rejectWithValue }) => {
         try {
-            return await categoryService.updateCategory(id, categoryData);
+            return await categoryService.updateCategoryStatus(id, categoryData);
         } catch (error) {
             return rejectWithValue(error.response?.data || 'Failed to update category');
+        }
+    }
+);
+
+export const updateCategory = createAsyncThunk(
+    'categories/update',
+    async ({ id, name }, { rejectWithValue }) => {
+        try {
+            return await categoryService.updateCategory(id, { name });
+        } catch (error) {
+            return rejectWithValue(error.response?.data || 'Failed to update category name');
         }
     }
 );
@@ -58,11 +69,22 @@ export const addSubcategory = createAsyncThunk(
     }
 );
 
-export const updateSubcategory = createAsyncThunk(
-    'categories/updateSubcategory',
+export const updateSubcategoryStatus = createAsyncThunk(
+    'categories/updateSubcategory/status',
     async ({ categoryId, subcategoryId, status }, { rejectWithValue }) => {
         try {
-            return await categoryService.updateSubcategory(categoryId, subcategoryId, status);
+            return await categoryService.updateSubcategoryStatus(categoryId, subcategoryId, status);
+        } catch (error) {
+            return rejectWithValue(error.response?.data || 'Failed to update subcategory');
+        }
+    }
+);
+
+export const updateSubcategory = createAsyncThunk(
+    'categories/updateSubcategory',
+    async ({ categoryId, subcategoryId, name }, { rejectWithValue }) => {
+        try {
+            return await categoryService.updateSubCategory(categoryId, subcategoryId, {name});
         } catch (error) {
             return rejectWithValue(error.response?.data || 'Failed to update subcategory');
         }

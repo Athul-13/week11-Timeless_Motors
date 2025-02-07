@@ -17,9 +17,12 @@ const Dashboard = () => {
         ]);
         const usersData = await usersRes.json();
         const postsData = await postsRes.json();
-        setUsers(usersData);
-        setPosts(postsData);
-        setLoading(false);
+
+        setTimeout(() => {
+          setUsers(usersData);
+          setPosts(postsData);
+          setLoading(false);
+        }, 500);
       } catch (error) {
         console.error('Error fetching data:', error);
         setLoading(false);
@@ -49,8 +52,8 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-lg">Loading dashboard data...</div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
       </div>
     );
   }
