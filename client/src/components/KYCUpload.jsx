@@ -2,20 +2,24 @@ import { useState, useEffect } from 'react';
 import { Upload, FileText, X, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api, { profileServices } from '../utils/api';
+import { useSelector } from 'react-redux';
 
 const KYCUpload = ({ userId, className = "" }) => {
   const [file, setFile] = useState(null);
   const [documentType, setDocumentType] = useState('');
   const [uploading, setUploading] = useState(false);
   const [documents, setDocuments] = useState([]);
+  const [verificationStatus, setVerificationStatus] = useState('Not Verified');
+  const user = useSelector((state) => state.auth.user);
 
   const documentTypes = ['Passport', 'Aadhaar', 'Driver License', 'Voter ID', 'PAN Card'];
 
+  
   useEffect(() => {
     const fetchKYC = async () => {
       try {
         const response = await profileServices.getKYC(userId);
-        if (response.documents?.length > 0) {
+        if (response.documents) {
           setDocuments(response.documents.map(doc => ({
             id: doc._id,
             name: doc.documentUrl.split('/').pop(),
@@ -24,13 +28,26 @@ const KYCUpload = ({ userId, className = "" }) => {
             createdAt: new Date(doc.createdAt),
             updatedAt: new Date(doc.updatedAt)
           })));
+        } else {
+          setDocuments([])
         }
       } catch (err) {
-        toast.error('Error fetching KYC documents.');
+        console.error('Error fetching KYC documents:', err);
+        setDocuments([]);
+
+        if (err.response?.status !== 404) {
+          toast.error('Error fetching KYC documents.');
+        }
       }
     };
     fetchKYC();
   }, [userId]);
+
+  useEffect(() => {
+    if (user?.status === 'verified') {
+      setVerificationStatus('Verified');
+    }
+  }, [user]);
 
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
@@ -60,6 +77,8 @@ const KYCUpload = ({ userId, className = "" }) => {
       toast.error('Please select a file to upload');
       return;
     }
+
+    setVerificationStatus('Processing');
 
     const formData = new FormData();
     formData.append('file', file);
@@ -109,7 +128,20 @@ const KYCUpload = ({ userId, className = "" }) => {
   return (
     <div className={`max-w-3xl mx-auto mt-5 p-4 rounded-xl bg-gray-200 ${className}`}>
       <div className="px-4 py-3">
-        <h2 className="text-lg font-medium mb-4">KYC Documents</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-medium">KYC Documents</h2>
+        <span
+            className={`text-xs font-semibold px-2 py-1 rounded-full ${
+              verificationStatus === 'Verified'
+                ? 'bg-green-500 text-white'
+                : verificationStatus === 'Processing'
+                ? 'bg-yellow-500 text-white'
+                : 'bg-red-500 text-white'
+            }`}
+          >
+            {verificationStatus}
+          </span>
+      </div>
 
         {documents.length > 0 && (
           <div className="mb-6">

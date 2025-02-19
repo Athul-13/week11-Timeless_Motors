@@ -1,6 +1,13 @@
-import { useState, useEffect } from "react"
-import { flexRender, getCoreRowModel, useReactTable, getFilteredRowModel } from "@tanstack/react-table"
-import { Package, Download, ChevronDown, ChevronUp } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { 
+  flexRender, 
+  getCoreRowModel, 
+  useReactTable, 
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel
+} from "@tanstack/react-table"
+import { Package, Download, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react"
 import { toast, Toaster } from "react-hot-toast"
 
 import { orderService } from "../../utils/api"
@@ -158,6 +165,12 @@ const Orders = () => {
   const [expandedRows, setExpandedRows] = useState(new Set())
   const [statusLoading, setStatusLoading] = useState(false)
   const [paymentStatusLoading, setPaymentStatusLoading] = useState(false)
+  const [dateFilter, setDateFilter] = useState("all")
+  const [customDateRange, setCustomDateRange] = useState({
+    start: "",
+    end: ""
+  })
+  const [sorting, setSorting] = useState([])
 
   useEffect(() => {
     fetchOrders()
@@ -173,6 +186,41 @@ const Orders = () => {
       setLoading(false)
     }
   }
+
+  // Date filtering logic
+  const filteredOrders = useMemo(() => {
+    const today = new Date()
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0))
+
+    return orders.map(order => ({
+      ...order,
+      // Add a sortableDate field for better performance
+      sortableDate: new Date(order.timestamps.orderedAt).getTime()
+    })).filter(order => {
+      const orderDate = new Date(order.timestamps.orderedAt)
+      
+      switch (dateFilter) {
+        case "daily":
+          return orderDate >= startOfDay
+        case "weekly":
+          const weekStart = new Date(today.setDate(today.getDate() - 7))
+          return orderDate >= weekStart
+        case "monthly":
+          const monthStart = new Date(today.setMonth(today.getMonth() - 1))
+          return orderDate >= monthStart
+        case "yearly":
+          const yearStart = new Date(today.setFullYear(today.getFullYear() - 1))
+          return orderDate >= yearStart
+        case "custom":
+          if (!customDateRange.start || !customDateRange.end) return true
+          const start = new Date(customDateRange.start)
+          const end = new Date(customDateRange.end)
+          return orderDate >= start && orderDate <= end
+        default:
+          return true
+      }
+    })
+  }, [orders, dateFilter, customDateRange])
 
   const handleOrderStatusChange = async (orderId, newStatus) => {
     setStatusLoading(true)
@@ -301,19 +349,30 @@ const Orders = () => {
           );
         },
       },      
-    {
-      header: "Order Date",
-      accessorKey: "timestamps.orderedAt",
-      cell: ({ getValue }) => {
-        const orderDate = new Date(getValue())
-        return (
-          <div>
-            <span>{orderDate.toLocaleDateString()}</span>
-            <span className="text-xs text-gray-500 block">{orderDate.toLocaleTimeString()}</span>
-          </div>
-        )
+      {
+        header: ({ column }) => {
+          return (
+            <button
+              className="flex items-center gap-2"
+              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            >
+              Order Date
+              <ArrowUpDown className="h-4 w-4" />
+            </button>
+          )
+        },
+        accessorKey: "sortableDate",
+        cell: ({ row }) => {
+          const orderDate = new Date(row.original.timestamps.orderedAt)
+          return (
+            <div>
+              <span>{orderDate.toLocaleDateString()}</span>
+              <span className="text-xs text-gray-500 block">{orderDate.toLocaleTimeString()}</span>
+            </div>
+          )
+        },
+        sortingFn: "datetime"
       },
-    },
     {
       header: "Actions",
       id: "actions",
@@ -341,14 +400,23 @@ const Orders = () => {
   ]
 
   const table = useReactTable({
-    data: orders,
+    data: filteredOrders,
     columns,
     state: {
       globalFilter: searchQuery,
+      sorting
     },
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
     onGlobalFilterChange: setSearchQuery,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
     globalFilterFn: (row, columnId, filterValue) => {
       const searchLower = filterValue.toLowerCase()
       return (
@@ -374,6 +442,36 @@ const Orders = () => {
         <h2 className="text-2xl font-bold text-gray-800">Order Management</h2>
 
         <div className="flex items-center gap-4">
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+          >
+            <option value="all">All Time</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+            <option value="custom">Custom Range</option>
+          </select>
+
+          {dateFilter === "custom" && (
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={customDateRange.start}
+                onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+              />
+              <input
+                type="date"
+                value={customDateRange.end}
+                onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+              />
+            </div>
+          )}
+
           <input
             type="text"
             placeholder="Search orders..."
@@ -389,6 +487,7 @@ const Orders = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
         </div>
       ) : (
+        <>
         <div className="rounded-md border border-gray-300">
           <table className="w-full table-auto">
             <thead className="bg-gray-300">
@@ -433,6 +532,47 @@ const Orders = () => {
             </tbody>
           </table>
         </div>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">
+                Page {table.getState().pagination.pageIndex + 1} of{" "}
+                {table.getPageCount()}
+              </span>
+              <select
+                value={table.getState().pagination.pageSize}
+                onChange={e => {
+                  table.setPageSize(Number(e.target.value))
+                }}
+                className="px-2 py-1 border border-gray-300 rounded-md"
+              >
+                {[10, 20, 30, 40, 50].map(pageSize => (
+                  <option key={pageSize} value={pageSize}>
+                    Show {pageSize}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+                className="p-1 border border-gray-300 rounded-md disabled:opacity-50"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+                className="p-1 border border-gray-300 rounded-md disabled:opacity-50"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
-const Notification = require('../models/Notification');
+const NotificationService = require('../services/notificationServices');
 const {Server} = require('socket.io');
 
 const initializeSocket = (server) => {
@@ -13,6 +13,9 @@ const initializeSocket = (server) => {
             credentials: true
         }
     });
+
+    // Initialize NotificationService with socket instance
+    NotificationService.initialize(io);
 
     // Socket middleware for authentication 
     io.use(async (socket, next) => {
@@ -36,29 +39,29 @@ const initializeSocket = (server) => {
         }
     });
 
-    const createNotification = async (recipientId, type, data) => {
-        try {
-            const notification = new Notification({
-                recipient: recipientId,
-                type: type,
-                read: false,
-                data: data
-            });
+    // const createNotification = async (recipientId, type, data) => {
+    //     try {
+    //         const notification = new Notification({
+    //             recipient: recipientId,
+    //             type: type,
+    //             read: false,
+    //             data: data
+    //         });
             
-            await notification.save();
+    //         await notification.save();
             
-            // Populate necessary fields before emitting
-            const populatedNotification = await Notification.findById(notification._id)
-                .populate('data.senderId', 'first_name last_name profile_picture')
-                .populate('data.listingId', 'make model year images');
+    //         // Populate necessary fields before emitting
+    //         const populatedNotification = await Notification.findById(notification._id)
+    //             .populate('data.senderId', 'first_name last_name profile_picture')
+    //             .populate('data.listingId', 'make model year images');
             
-            io.to(recipientId.toString()).emit('newNotification', populatedNotification);
-            return notification;
-        } catch (error) {
-            console.error('Error creating notification:', error);
-            throw error;
-        }
-    };
+    //         io.to(recipientId.toString()).emit('newNotification', populatedNotification);
+    //         return notification;
+    //     } catch (error) {
+    //         console.error('Error creating notification:', error);
+    //         throw error;
+    //     }
+    // };
 
     io.on('connection', (socket) => {
         console.log('User connected:', socket.user?._id);
@@ -197,13 +200,13 @@ const initializeSocket = (server) => {
                     status: 'delivered'
                 });
         
-                await createNotification(data.sellerId, 'message', {
-                    chatId: chat._id,
-                    messageId: message._id,
-                    senderId: socket.user._id,
-                    message: data.message.substring(0, 100),
-                    listingId: data.listingId
-                });
+                await NotificationService.sendMessageNotification(
+                    data.sellerId,
+                    chat._id,
+                    socket.user._id,
+                    data.message,
+                    chat.listingId
+                );
         
             } catch (error) {
                 console.error('Error handling initial message:', error);
@@ -232,13 +235,13 @@ const initializeSocket = (server) => {
         
                 const recipientId = chat.participants.find(p => p.toString() !== socket.user._id.toString());
                 if (recipientId) {
-                    await createNotification(recipientId, 'message', {
-                        chatId: chat._id,
-                        messageId: message._id,
-                        senderId: socket.user._id,
-                        message: data.message.substring(0, 100),
-                        listingId: chat.listingId
-                    });
+                    await NotificationService.sendMessageNotification(
+                        recipientId,
+                        chat._id,
+                        socket.user._id,
+                        data.message,
+                        chat.listingId
+                    );
                 }
         
                 const isSeller = chat.listingId.seller_id.toString() === socket.user._id.toString();
@@ -270,6 +273,11 @@ const initializeSocket = (server) => {
                 console.error('Error sending message:', error);
                 socket.emit('messageError', { message: 'Failed to send message' });
             }
+        });
+        
+        socket.on('leaveRoom', ({ roomId }) => {
+            console.log(`User ${socket.user?._id} left room: ${roomId}`);
+            socket.leave(roomId);
         });
         
 

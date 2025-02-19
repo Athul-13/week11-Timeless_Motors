@@ -3,7 +3,9 @@ import { NavLink } from "react-router-dom";
 const Sidebar = () => {
   const menuItems = [
     { name: "Profile Details", path: "/profile/profileDetails" },
-    { name: "Payments", path: "/profile/payments" },
+    { name: "Overview", path: "/profile/overview" },
+    { name: "Transactions", path: "/profile/transactions"},
+    { name: "Sales", path: "/profile/sales"},
     { name: "My Listings", path: "/profile/myListings" },
     { name: "My Bids", path: "/profile/myBids" },
     { name: "Past Orders", path: "/profile/pastOrders" },
@@ -26,7 +28,8 @@ const Sidebar = () => {
                 }`
               }
             >
-              {item.name}
+              
+              <span>{item.name}</span>
             </NavLink>
           </li>
         ))}

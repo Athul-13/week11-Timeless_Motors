@@ -16,6 +16,7 @@ const OrderConfirmation = () => {
         const response = await orderService.getOrder(orderId);
         if (response.success) {
           setOrder(response.order);
+          console.log('order:',response.order);
         } else {
           console.error("Failed to fetch order:", response.message);
         }
@@ -180,14 +181,14 @@ const OrderConfirmation = () => {
                 <h3 className="font-medium text-gray-800 mt-4 mb-2">Payment Information</h3>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-3">
-                    {order.payment.method === "credit_card" ? (
+                    {order.payment.method === "razorpay" ? (
                       <CreditCard className="w-5 h-5 text-gray-500" />
                     ) : (
                       <Truck className="w-5 h-5 text-gray-500" />
                     )}
                     <div>
                       <p className="text-gray-800">
-                        {order.payment.method === "credit_card" ? "Credit Card" : "Cash on Delivery"}
+                        {order.payment.method === "razorpay" ? "Razorpay" : "Cash on Delivery"}
                       </p>
                       <p className="text-sm text-gray-600">Status: {order.payment.status}</p>
                     </div>

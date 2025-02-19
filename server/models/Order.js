@@ -54,7 +54,7 @@ const orderSchema = new Schema({
   payment: {
     method: {
       type: String,
-      enum: ['credit_card', 'cod'],
+      enum: ['razorpay', 'cod'],
       required: true
     },
     status: {
@@ -62,11 +62,30 @@ const orderSchema = new Schema({
       enum: ['Pending', 'Processing', 'Completed', 'Failed', 'Refunded'],
       default: 'Pending'
     },
+    // Razorpay specific fields
+    razorpay_order_id: {
+      type: String,
+      sparse: true
+    },
+    razorpay_payment_id: {
+      type: String,
+      sparse: true
+    },
+    razorpay_signature: {
+      type: String,
+      sparse: true
+    },
     transactionId: {
       type: String,
       sparse: true
     },
-    paidAt: Date
+    paidAt: Date,
+    // Additional payment details
+    paymentAttempts: [{
+      attemptedAt: Date,
+      status: String,
+      error: String
+    }]
   },
   shippingAddress: {
     name: {
@@ -78,8 +97,8 @@ const orderSchema = new Schema({
       required: true
     },
     landmark: {
-        type: String,
-        required: true
+      type: String,
+      required: true
     },
     city: {
       type: String,
@@ -98,8 +117,8 @@ const orderSchema = new Schema({
       required: true
     },
     country: {
-        type: String,
-        required: true
+      type: String,
+      required: true
     }
   },
   auctionDetails: {
@@ -130,15 +149,15 @@ const orderSchema = new Schema({
 
 // Generate unique order number
 orderSchema.pre('save', function(next) {
-if (this.isNew) {
+  if (this.isNew) {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const randomUUID = uuidv4().split('-')[0]; // Get part of UUID for uniqueness
-
+    
     this.orderNumber = `ORD${year}${month}${randomUUID}`;
-}
-next();
+  }
+  next();
 });
 
 // Calculate total amount
@@ -153,6 +172,8 @@ orderSchema.index({ user: 1 });
 orderSchema.index({ 'orderStatus': 1 });
 orderSchema.index({ 'payment.status': 1 });
 orderSchema.index({ createdAt: 1 });
+orderSchema.index({ 'payment.razorpay_order_id': 1 });
+orderSchema.index({ 'payment.razorpay_payment_id': 1 });
 
 const Order = mongoose.model('Order', orderSchema);
 

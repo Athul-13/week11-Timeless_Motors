@@ -8,6 +8,7 @@ import { toast, Toaster } from 'react-hot-toast';
 import { fetchCart, removeFromCart } from '../../redux/cartSlice';
 import AddressManager from './AddressManager';
 import { orderService } from '../../utils/api';
+import RazorpayCheckout from '../../components/RazorpayCheckout';
 
 // const CartItem = ({ listing, onCardClick, onRemove }) => {
 //   const price = listing.type === 'Auction' 
@@ -173,21 +174,7 @@ const PaymentMethodSelector = ({ onSelect, onClose, disabled }) => (
     <div className={`bg-white rounded-xl shadow p-4 mb-6 ${disabled ? 'opacity-50' : ''}`}>
         <h3 className="font-medium text-gray-800 mb-4">Select Payment Method</h3>
         <div className="space-y-3">
-        <button
-            disabled={disabled}
-            onClick={() => onSelect({
-            type: 'credit_card',
-            label: 'Credit Card',
-            icon: CreditCard
-            })}
-            className={`w-full flex items-center gap-3 p-3 border rounded-lg ${!disabled && 'hover:border-indigo-600'} transition-colors`}
-        >
-            <CreditCard className="w-5 h-5 text-gray-500" />
-            <div className="flex-1 text-left">
-            <div className="font-medium text-gray-800">Credit Card</div>
-            <div className="text-sm text-gray-500">Pay securely with your credit card</div>
-            </div>
-        </button>
+        <RazorpayCheckout onSelect={onSelect} disabled={disabled} />
 
         <button
             disabled={disabled}
@@ -287,23 +274,25 @@ const Checkout = () => {
   };
 
   const calculateTotals = () => {
-    const subtotal = items.reduce((sum, item) => 
-      sum + item.items.reduce((subSum, subItem) => {
-        const price = subItem.product.type === 'Auction'
-          ? subItem.product.current_bid || 0
-          : subItem.product.type === 'Fixed price'
-          ? subItem.product.starting_bid || 0
-          : 0;
-        return subSum + price;
-      }, 0), 0
-    );
-    const tax = subtotal * 0.18;
+    // Find the selected item from all cart items
+    const selectedItem = items
+      .flatMap(item => item.items)
+      .find(item => item.product._id === selectedItemId);
+  
+    if (!selectedItem) {
+      return { subtotal: 0, tax: 0, total: 0 };
+    }
+  
+    // Calculate price based on item type
+    const subtotal = selectedItem.product.type === 'Auction' 
+      ? selectedItem.product.current_bid || 0
+      : selectedItem.product.starting_bid || 0;
+  
+    const tax = subtotal * 0.18; // 18% GST
     const total = subtotal + tax;
+  
     return { subtotal, tax, total };
   };
-  console.log('address:',selectedAddress);
-    console.log('item:',selectedItemId);
-    console.log('pmethod:',selectedPaymentMethod);
 
   const handlePlaceOrder = async () => {
     if (!selectedAddress || !selectedPaymentMethod) {
@@ -312,7 +301,6 @@ const Checkout = () => {
     }
     
     try {
-      // Find the selected item from cart
       const item = items.find(cartItem => 
         cartItem.items.some(subItem => subItem.product._id === selectedItemId)
       );
@@ -327,10 +315,11 @@ const Checkout = () => {
       ).product;
   
       // Calculate price and tax
-      const priceAmount = product.type === 'Auction' 
-        ? product.current_bid 
-        : product.starting_bid;
+      const priceAmount = product.type === 'Auction' ? product.current_bid : product.starting_bid;
       const taxAmount = priceAmount * 0.18; // 18% GST
+      const totalAmount = priceAmount + taxAmount;
+      const adminCommission = priceAmount * 0.10; // Assuming 10% commission
+      const sellerAmount = priceAmount - adminCommission;
   
       // Construct order data matching the schema
       const orderData = {
@@ -344,9 +333,9 @@ const Checkout = () => {
           amount: taxAmount,
           percentage: 18
         },
-        totalAmount: priceAmount + taxAmount,
+        totalAmount,
         payment: {
-          method: selectedPaymentMethod.type, // 'cod' from your payment method object
+          method: selectedPaymentMethod.type,
           status: 'Pending'
         },
         shippingAddress: {
@@ -369,17 +358,80 @@ const Checkout = () => {
           timeRemaining: new Date(product.end_date) - new Date()
         };
       }
+
+      if (selectedPaymentMethod.type === 'razorpay') {
+        // Initialize Razorpay
+        const res = await selectedPaymentMethod.handler();
+        if (!res) {
+          toast.error('Failed to load Razorpay SDK');
+          return;
+        }
+        const totalAmount = priceAmount + taxAmount
   
-      const response = await orderService.createOrder(orderData);
+        // Create Razorpay order
+        const razorpayOrder = await orderService.createRazorpayOrder({
+          amount: totalAmount
+        });
+
+        // Configure Razorpay
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        order_id: razorpayOrder.id,
+        name: 'Timeless Motors',
+        description: `Payment for ${product.make} ${product.model}`,
+        handler: async (response) => {
+          try {
+            // Verify payment
+            await orderService.verifyPayment(response);
+            
+            // Create order after successful payment
+            const orderResponse = await orderService.createOrder({
+              ...orderData,
+              payment: {
+                ...orderData.payment,
+                razorpay_order_id: razorpayOrder.id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                status: 'Completed'
+              }
+            });
+
+            if (orderResponse.success) {
+              toast.success('Order placed successfully');
+              dispatch(removeFromCart(selectedItemId));
+              navigate(`/orders/${orderResponse.order._id}`);
+            }
+          } catch (error) {
+            toast.error('Payment verification failed');
+          }
+        },
+        prefill: {
+          name: selectedAddress.name,
+          contact: selectedAddress.phone_number
+        },
+        theme: {
+          color: '#4F46E5'
+        },
+        modal: {
+          ondismiss: function () {
+            toast.error('Payment was not completed');
+          }
+        }
+      };
   
-      if (response.success) {
-        toast.success('Order placed successfully');
-        dispatch(removeFromCart(selectedItemId));
-        navigate(`/orders/${response.order._id}`);
+      const paymentObject = new window.Razorpay(options);
+      paymentObject.open();
       } else {
-        toast.error(response.message || 'Failed to place order');
+        // Handle COD order creation
+        const response = await orderService.createOrder(orderData);
+        if (response.success) {
+          toast.success('Order placed successfully');
+          dispatch(removeFromCart(selectedItemId));
+          navigate(`/orders/${response.order._id}`);
+        }
       }
-  
+
     } catch (error) {
       toast.error(error.message || 'Failed to place order');
       console.error('Place Order Error:', error);

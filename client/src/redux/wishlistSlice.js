@@ -10,7 +10,6 @@ export const fetchWishlist = createAsyncThunk(
             throw new Error('User not authenticated');
         }
         const response = await wishlistService.getWishlist(auth.user.id);
-        console.log('resp:', response.data)
         return response.data
     } catch (error) {
         return rejectWithValue(error.message || 'Something went wrong');

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import Cookies from 'js-cookie';
 import initializeSocket from '../../socketConfig';
 
 const SocketContext = createContext(null);
@@ -11,6 +12,12 @@ export const SocketProvider = ({ children }) => {
     const initSocket = async () => {
       try {
         const newSocket = initializeSocket();
+        const token = Cookies.get('token');
+      
+      if (!token) {
+        setIsInitialized(true); // Mark as initialized but with no socket
+        return;
+      }
         
         // Wait for the socket to connect
         newSocket.on('connect', () => {
@@ -40,6 +47,14 @@ export const SocketProvider = ({ children }) => {
 
     initSocket();
   }, []);
+
+  // Add a login state dependency to reinitialize socket when user logs in
+  useEffect(() => {
+    const token = Cookies.get('token');
+    if (!socket && token) {
+      setIsInitialized(false); // Reset initialization to trigger reconnection
+    }
+  }, [socket]);
 
   // Provide both socket and initialization state
   const value = {

@@ -116,7 +116,15 @@ const updateUserStatus = async (req, res) => {
             });
         }
 
-        res.json({ message: 'User status updated successfully', user });
+        return res.status(200).json({
+            success: true,
+            message: 'Status updated successfully',
+            user: {
+                _id: user._id,
+                email: user.email,
+                status: user.status
+            }
+        });
     } catch (error) {
         res.status(500).json({ message: 'Error updating user status' });
     }

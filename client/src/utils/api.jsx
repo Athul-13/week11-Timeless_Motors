@@ -349,6 +349,10 @@ export const orderService = {
       const response = await api.get('/auth/order');
       return response.data;
     },
+    getSellerOrders: async () => {
+        const response = await api.get('/auth/seller-orders');
+        return response.data;
+    },
     getAllOrders: async () => {
         const response = await api.get('/auth/orders');
         return response.data;
@@ -359,6 +363,14 @@ export const orderService = {
     },
     updatePaymentStatus: async (orderId, newStatus) => {
         const response = await api.put(`/auth/orders/${orderId}/payment-status`, { status: newStatus });
+        return response.data;
+    },
+    createRazorpayOrder: async (data) => {
+        const response = await api.post('/payment/create-order',data);
+        return response.data;
+    },
+    verifyPayment: async (data) => {
+        const response = await api.post('/payment/verify-payment', data);
         return response.data;
     }
 };
@@ -609,6 +621,37 @@ export const adminServices = {
     },
     fetchAllActivity: async ()=> {
         const response = await api.get('/auth/activity-log');
+        return response.data;
+    },
+    generateReport: async (params) => {
+        const response = await api.get(`/PDF/generate-sales-report?${params}`);
+        return response.data
+    },
+    generateExcelReport: async (params) => {
+        const response = await api.get(`/excel/generate-sales-report-excel?${params}`);
+        return response.data;
+    }
+}
+
+export const walletService = {
+    fetchWallet: async() => {
+        const response = await api.get('/wallet/balance');
+        return response.data;
+    },
+    fetchTransactions: async() => {
+        const response = await api.get('/wallet/transactions');
+        return response.data;
+    },
+    fetchAllTransactions: async() => {
+        const response = await api.get('/wallet/all-transactions');
+        return response.data;
+    },
+    fetchAllWallet: async() => {
+        const response = await api.get('/wallet/all-wallet');
+        return response.data;
+    },
+    walletStatus: async(walletId, status) => {
+        const response = await api.patch(`/wallet/${walletId}/status`,{isActive: status});
         return response.data;
     }
 }

@@ -70,11 +70,15 @@ exports.removeCartItem = async (req, res) => {
         const userId = req.user._id;
         const listingId = req.params.listingId;
 
+        console.log(`Removing item from cart. User: ${userId}, Listing: ${listingId}`);
+
         // Check if listing exists and get its type
         const listing = await Listing.findById(listingId);
         if (!listing) {
             return res.status(404).json({ error: 'Listing not found' });
         }
+
+        console.log(`Listing found: ${listing.title}, Type: ${listing.type}, Status: ${listing.status}`);
 
         // Find user's cart
         let cart = await Cart.findOne({ user: userId });
@@ -83,10 +87,20 @@ exports.removeCartItem = async (req, res) => {
         }
 
         // If it's an auction item, handle the cascade first
-        if (listing.type === 'Auction' && listing.status === 'active') {
+        if (listing.type === 'Auction' && listing.status === 'expired') {
+            console.log('Auction item detected. Processing cascade...');
             try {
-                // Handle cascade before removing from cart
                 await cartTimeoutService.handleCartRemoval(listingId, userId);
+                
+                // Refresh cart after cascade
+                cart = await Cart.findOne({ user: userId });
+
+                console.log('Auction item removed and cascade completed.');
+                
+                return res.status(200).json({
+                    message: 'Auction item removed and cascaded to next bidder',
+                    cart
+                });
             } catch (cascadeError) {
                 console.error('Error in bid cascade:', cascadeError);
                 return res.status(500).json({
@@ -104,9 +118,7 @@ exports.removeCartItem = async (req, res) => {
         await cart.save();
 
         res.status(200).json({
-            message: listing.type === 'Auction' ? 
-                'Auction item removed and cascaded to next bidder' : 
-                'Item removed from cart',
+            message: 'Item removed from cart',
             cart
         });
 

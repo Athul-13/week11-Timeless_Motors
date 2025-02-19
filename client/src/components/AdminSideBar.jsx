@@ -8,7 +8,9 @@ import {
     Grid,
     MessagesSquare,
     UserRoundCog,
-    FileClock
+    FileClock,
+    FileChartColumn,
+    CreditCard
   } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
@@ -22,6 +24,8 @@ const AdminSideBar = () => {
         { icon: <Gavel size={20} />, label: 'Auction management', path: '/admin/auctions' },
         { icon: <Image size={20} />, label: 'Banner Management', path: '/admin/banners' },
         { icon: <ShoppingCart size={20} />, label: 'Orders/Transactions', path: '/admin/orders' },
+        { icon: <CreditCard size={20} />, label: 'Ledger', path: '/admin/transactions'},
+        { icon: <FileChartColumn size={20} />, label: 'Sales Report', path: '/admin/report' },
         { icon: <Grid size={20} />, label: 'Categories', path: '/admin/categories' },
         { icon: <MessagesSquare size={20} />, label: 'Support', path: '/admin/support' }
     ];

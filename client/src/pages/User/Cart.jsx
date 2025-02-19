@@ -7,13 +7,13 @@ import Footer from '../../components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
 import { fetchCart, removeFromCart } from '../../redux/cartSlice';
 
-const CartItem = ({ listing, onCardClick, onRemove, isSelected, onSelect }) => {
+const CartItem = ({ listing, onCardClick, onRemove, isSelected, onSelect, addedAt }) => {
   const price = listing.type === 'Auction' 
     ? listing.current_bid 
     : listing.starting_bid;
 
   const auctionEndTime = listing.type === 'Auction' 
-    ? new Date(listing.addedToCartAt).getTime() + (2 * 24 * 60 * 60 * 1000)
+    ? new Date(listing.addedAt).getTime() + (2 * 24 * 60 * 60 * 1000)
     : null;
 
   return (
@@ -40,10 +40,7 @@ const CartItem = ({ listing, onCardClick, onRemove, isSelected, onSelect }) => {
           ₹ {price?.toLocaleString()}
         </div>
         {listing.type === 'Auction' && (
-          <div className="flex items-center gap-2 text-orange-600 font-medium mt-2">
-            <Timer size={16} />
-            <span>48h remaining</span>
-          </div>
+           <CountdownTimer addedAt={addedAt} />
         )}
         <button
           onClick={(e) => {
@@ -118,6 +115,45 @@ const EmptyCart = ({ onShopNow }) => (
     </button>
   </div>
 );
+
+const CountdownTimer = ({ addedAt }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const addedTime = new Date(addedAt).getTime();
+      const endTime = addedTime + (48 * 60 * 60 * 1000); // 48 hours in milliseconds
+      const now = new Date().getTime();
+      const difference = endTime - now;
+
+      if (difference <= 0) {
+        return 'Expired';
+      }
+
+      const hours = Math.floor(difference / (1000 * 60 * 60));
+      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+
+      return `${hours}h ${minutes}m remaining`;
+    };
+
+    // Initial calculation
+    setTimeLeft(calculateTimeLeft());
+
+    // Update every minute
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, [addedAt]);
+
+  return (
+    <div className="flex items-center gap-2 text-orange-600 font-medium mt-2">
+      <Timer size={16} />
+      <span>{timeLeft}</span>
+    </div>
+  );
+};
 
 const Cart = () => {
   const dispatch = useDispatch();
@@ -201,6 +237,7 @@ const Cart = () => {
                 <CartItem
                   key={item._id}
                   listing={item.product}
+                  addedAt={item.addedAt} 
                   onCardClick={() => {}}
                   onRemove={handleRemoveItem}
                   isSelected={selectedItem?._id === item.product._id}

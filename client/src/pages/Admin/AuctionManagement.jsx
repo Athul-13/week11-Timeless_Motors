@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { Edit, Eye, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Edit, Eye, Clock, ToggleLeft, ToggleRight, Search  } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import {
   useReactTable,
@@ -17,6 +17,8 @@ const AuctionManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedType, setSelectedType] = useState('All');
   const currentUser = useSelector(state => state.auth.user.id);
 
   const navigate = useNavigate();
@@ -212,14 +214,14 @@ const AuctionManagement = () => {
               {isValidStartDate && isValidEndDate ? (
                 getRemainingTime(endDate)
               ) : (
-                <span className="text-red-500">--</span> // or some other fallback
+                <span className="text-red-500">--</span>
               )}
             </div>
             <div className="text-xs text-gray-500">
               {isValidStartDate && isValidEndDate ? (
                 `${formatDate(startDate)} to ${formatDate(endDate)}`
               ) : (
-                <span className="text-gray-600">No dates available</span> // or some other fallback
+                <span className="text-gray-600">No dates available</span>
               )}
             </div>
           </div>
@@ -273,19 +275,45 @@ const AuctionManagement = () => {
     }
   ], [navigate]);
 
+  const filteredData = useMemo(() => {
+    console.log('Current listings:', listings);
+  console.log('Selected type:', selectedType);
+    return listings.filter(listing => {
+      // First apply type filter
+      const passesTypeFilter = 
+  selectedType === 'All' || 
+  listing.type?.toLowerCase().trim() === selectedType.toLowerCase().trim();
+      
+      if (!passesTypeFilter) return false;
+      
+      // Then apply search filter if needed
+      if (!searchQuery) return true;
+      
+      const searchLower = searchQuery.toLowerCase();
+      const vehicleName = `${listing.year} ${listing.make} ${listing.model}`.toLowerCase();
+      const seller = listing.seller_id;
+      const sellerName = seller ? `${seller.first_name} ${seller.last_name}`.toLowerCase() : '';
+      
+      return vehicleName.includes(searchLower) || sellerName.includes(searchLower);
+    });
+  }, [listings, searchQuery, selectedType]);
+
   const table = useReactTable({
-    data: listings,
+    data: filteredData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    state: {
+      globalFilter: searchQuery || selectedType,
+    },
+    onGlobalFilterChange: setSearchQuery,
     initialState: {
       pagination: {
         pageSize: 10,
       },
     },
   });
-
 
   if (loading) {
     return (
@@ -331,6 +359,29 @@ const AuctionManagement = () => {
         </button>
       </div>
     </div>
+
+    {/* New Search and Filter Section */}
+    <div className="mb-4 flex items-center gap-4"> 
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Search by vehicle or seller name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+          />
+        </div>
+        <select
+          value={selectedType}
+          onChange={(e) => setSelectedType(e.target.value)}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+        >
+          <option value="All">All Types</option>
+          <option value="Auction">Auction</option>
+          <option value="Fixed price">Fixed Price</option>
+        </select>
+      </div>
 
     <div className="rounded-md border border-gray-300">
       <table className="w-full table-auto">

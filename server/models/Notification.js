@@ -4,7 +4,7 @@ const notificationSchema = new mongoose.Schema({
     recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     type: { 
       type: String, 
-      enum: ['message', 'bid_won', 'bid_lost', 'order_received', 'bid_placed', 'listing_ended'],
+      enum: ['message', 'bid_won', 'bid_lost', 'order_received', 'bid_placed', 'listing_ended', 'overbid'],
       required: true 
     },
     read: { type: Boolean, default: false },

@@ -80,10 +80,6 @@ exports.getKYC = async (req, res) => {
 
     const kycDocuments = await KYC.find({ user: userId });
 
-    if (kycDocuments.length === 0) {
-      return res.status(404).json({ message: 'No KYC documents found' });
-    }
-
     res.status(200).json({ documents: kycDocuments });
   } catch (error) {
     console.error('Error fetching KYC:', error);

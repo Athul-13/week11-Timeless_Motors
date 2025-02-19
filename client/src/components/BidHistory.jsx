@@ -25,6 +25,8 @@ const BidHistory = ({ listingId }) => {
     }
   }, [listingId]);
 
+  console.log('bids:',bids);
+
   if (loading) return <div>Loading bid history...</div>;
   if (error) return <div className="text-red-500">{error}</div>;
 

@@ -1,4 +1,5 @@
 const Address = require('../models/Address.js');
+const logActivity = require('../utils/logActivity.js');
 
 exports.getAddresses = async (req, res) => {
     try {
@@ -59,7 +60,7 @@ exports.addAddress = async (req, res) => {
         const newAddress = new Address(addressData);
         await newAddress.save();
 
-        await logActivity(userId, "New Address Added", `User added a new address in ${city}, ${country}`, req);
+        await logActivity(user._id, "New Address Added", `User added a new address in ${city}, ${country}`, req);
 
         return res.status(200).json({message: 'New address created'});
     } catch (error) {

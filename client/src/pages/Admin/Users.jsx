@@ -3,12 +3,14 @@ import {
   getCoreRowModel,
   useReactTable,
   getFilteredRowModel,
+  getPaginationRowModel,  
 } from '@tanstack/react-table';
 import { Check, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast, Toaster } from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchAllUsers, updateUserStatus } from '../../redux/userSlice';
+import { walletService } from '../../utils/api';
 
 const Users = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,8 +18,24 @@ const Users = () => {
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [wallets, setWallets] = useState([]);
+  const [pendingWallets, setPendingWallets] = useState({});
   const dispatch = useDispatch();
   const { users } = useSelector((state) => state.users);
+
+  useEffect(() => {
+    const fetchWallets = async() => {
+      try {
+        const data = await walletService.fetchAllWallet();
+        setWallets(data.wallet);
+      } catch (error) {
+        console.error('Error fetching wallets:', error);
+        toast.error('Failed to fetch wallet data');
+      }
+    };
+
+    fetchWallets();
+  }, []);
 
   useEffect(() => {
     setTimeout(()=>{
@@ -25,6 +43,10 @@ const Users = () => {
     },500)
     dispatch(fetchAllUsers());
   }, [dispatch]);
+
+  const getWalletForUser = (userId) => {
+    return wallets.find(wallet => wallet.user === userId);
+  };
 
   const columns = [
     {
@@ -45,6 +67,46 @@ const Users = () => {
         const value = row.getValue(columnId);
         return value.toLowerCase().includes(filterValue.toLowerCase());
       }
+    },
+    {
+      header: 'Wallet Status',
+      id: 'walletStatus',
+      cell: ({ row }) => {
+        const userWallet = getWalletForUser(row.original._id);
+        const isActive = userWallet ? userWallet.isActive : true;
+        const isPending = userWallet ? pendingWallets[userWallet._id] : false;
+        
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (!userWallet) {
+                  toast.error('No wallet found for this user');
+                  return;
+                }
+                handleWalletToggle(userWallet._id, isActive);
+              }}
+              disabled={!userWallet || isPending}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                isActive ? 'bg-green-600' : 'bg-red-600'
+              } ${(!userWallet || isPending) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isActive ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            {isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin text-gray-600" />
+            ) : (
+              <span className={`text-xs font-medium ${isActive ? 'text-green-800' : 'text-red-800'}`}>
+                {isActive ? 'Active' : 'Inactive'}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       header: 'Status',
@@ -125,9 +187,14 @@ const Users = () => {
     },
     onGlobalFilterChange: setSearchQuery,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(), // Add filtered row model
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(), // Add pagination row model
+    initialState: {
+      pagination: {
+        pageSize: 10, // Set items per page to 10
+      },
+    },
     globalFilterFn: (row, columnId, filterValue) => {
-      // Custom global filter to search across multiple columns
       const searchLower = filterValue.toLowerCase();
       return (
         row.original.first_name.toLowerCase().includes(searchLower) ||
@@ -168,6 +235,39 @@ const Users = () => {
       });
       setPendingAction(null);
       setShowStatusDialog(false);
+    }
+  };
+
+  const handleWalletToggle = async (walletId, currentStatus) => {
+    try {
+      setPendingWallets(prev => ({
+        ...prev,
+        [walletId]: true
+      }));
+
+      const newStatus = !currentStatus;
+      
+      await walletService.walletStatus(walletId, newStatus);
+      
+      // Update the specific wallet in the wallets array
+      setWallets(prevWallets => 
+        prevWallets.map(wallet => 
+          wallet._id === walletId 
+            ? { ...wallet, isActive: newStatus }
+            : wallet
+        )
+      );
+      
+      toast.success('Wallet status updated successfully');
+    } catch (error) {
+      console.error('Error updating wallet status:', error);
+      toast.error('Failed to update wallet status');
+    } finally {
+      setPendingWallets(prev => {
+        const updated = { ...prev };
+        delete updated[walletId];
+        return updated;
+      });
     }
   };
 
@@ -238,6 +338,38 @@ const Users = () => {
           </table>
         </div>
       )}
+
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-300">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">
+                Page{' '}
+                <span className="font-medium">
+                  {table.getState().pagination.pageIndex + 1}
+                </span>{' '}
+                of{' '}
+                <span className="font-medium">
+                  {table.getPageCount()}
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                className="px-3 py-1 border rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+              >
+                Previous
+              </button>
+              <button
+                className="px-3 py-1 border rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              >
+                Next
+              </button>
+            </div>
+          </div>
 
       {showStatusDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

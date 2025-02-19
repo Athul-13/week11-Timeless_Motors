@@ -1,18 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const {register, login, verifyOTP, resendOTP, googleAuth, logout, verifyForgotPasswordOTP, changePassword, refreshToken} = require('../controller/authController');
-const { protect, authorize } = require('../middleware/authMiddleware');
+const { protect, updateUserStatus, authorize, optionalProtect } = require('../middleware/authMiddleware');
 const { addListing, getAllListings, getListingById, updateListing, updateApprovalStatus, updateListingStatus, getListingsByUser } = require('../controller/listingController');
 const { getAllCategories, createCategory, addSubcategory, updateCategoryStatus, updateSubcategoryStatus, updateSubcategory, updateCategory } = require('../controller/categoryController');
 const { auth } = require('google-auth-library');
-const { getAllUsers, updateUserStatus } = require('../controller/userController');
+const { getAllUsers } = require('../controller/userController');
 const { getProfile, updateProfile, updateProfilePicture, getKYC } = require('../controller/profileController');
 const { getWishlist, addItemToWishlist, removeWishlistItem } = require('../controller/wishlistController');
 const {validateSignup} = require("../middleware/validateMiddleware.js");
 const { getCart, addItemToCart, removeCartItem, clearCart } = require('../controller/cartController.js');
 const { getAddresses, editAddress, removeAddress, addAddress } = require('../controller/addressController.js');
 const { placeBid, getBidsByListing, getBidsByUser } = require('../controller/bidController.js');
-const { createOrder, getOrder, getOrderByUser, getAllOrders, updateOrderStatus, updatePaymentStatus } = require('../controller/orderController.js');
+const { createOrder, getOrder, getOrderByUser, getAllOrders, updateOrderStatus, updatePaymentStatus, getSellerOrders } = require('../controller/orderController.js');
 const { getAllKYCDocuments, searchKYCDocument } = require('../controller/KYCcontroller.js');
 const { getAllActivity } = require('../controller/activityController.js');
 const { fetchNotification, markNotificationAsRead, markAllNotificationsAsRead } = require('../controller/notificationController.js');
@@ -62,10 +62,10 @@ router.get('/activity-log', protect, getAllActivity)
 
 
 // Listings
-router.get('/listings', getAllListings);
+router.get('/listings', optionalProtect, getAllListings);
 router.get('/mylistings', protect, getListingsByUser);
 router.post('/addListing', protect, addListing);
-router.get('/listings/:id', getListingById)
+router.get('/listings/:id',optionalProtect, getListingById)
 router.put('/listings/:id', protect, updateListing);
 router.put('/listings/:listingId/approval', protect, updateApprovalStatus);
 router.patch('/listings/:listingId/status',  protect, updateListingStatus);
@@ -109,6 +109,7 @@ router.post('/order/create', protect, createOrder);
 router.get('/order/:orderId', protect, getOrder);
 router.get('/order', protect, getOrderByUser);
 router.get('/orders', protect, getAllOrders);
+router.get('/seller-orders', protect,getSellerOrders );
 router.put('/orders/:orderId/status', protect, updateOrderStatus);
 router.put('/orders/:orderId/payment-status', protect, updatePaymentStatus)
 

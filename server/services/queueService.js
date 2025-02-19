@@ -2,14 +2,13 @@ const Queue = require('bull');
 const { redisConfig } = require('../config/redis');
 const Listing = require('../models/Listing');
 const Cart = require('../models/Cart');
-const User = require('../models/User');
+const NotificationService = require('./notificationServices');
 
 class QueueService {
   constructor() {
     // Define queue names as constants
     this.QUEUES = {
-      AUCTION_END: 'auction-end',
-      NOTIFICATIONS: 'notifications'
+      AUCTION_END: 'auction-end'
     };
 
     // Queue configurations
@@ -20,43 +19,78 @@ class QueueService {
           type: 'exponential',
           delay: 1000
         },
-        removeOnComplete: true
+        removeOnComplete: false,  // Change to false temporarily for debugging
+        timeout: 30000,
+        stallInterval: 5000
       }
     };
 
-    // Initialize queues
-    this.auctionEndQueue = new Queue(this.QUEUES.AUCTION_END, { redis: redisConfig });
-    this.notificationQueue = new Queue(this.QUEUES.NOTIFICATIONS, { redis: redisConfig });
+    // Initialize queue
+    this.auctionEndQueue = new Queue(this.QUEUES.AUCTION_END, { 
+      redis: redisConfig,
+      settings: {
+        stalledInterval: 5000, // Check for stalled jobs more frequently
+        lockDuration: 30000    // Increase lock duration
+      }
+    });
 
-    // Initialize queue handlers
-    this.initializeQueueHandlers();
-    this.setupProcessors();
-    this.setupQueueEvents();
-    this.startAuctionMonitoring();
+    this.initializeQueue();
+
+    // // Initialize queue handlers
+    // this.initializeQueueHandlers();
+    // this.startAuctionMonitoring();
+
+    // // Process existing expired auctions on startup
+    // this.processExistingAuctions();
+  }
+
+  async initializeQueue() {
+    try {
+      // Wait for Redis connection
+      await this.auctionEndQueue.isReady();
+      const client = this.auctionEndQueue.client;
+    console.log('Redis connection status:', client.status);
+      console.log('Queue ready for processing');
+
+      await this.checkFailedJobs();
+
+      // Setup processors after queue is ready
+      this.setupProcessors();
+      this.initializeQueueHandlers();
+      this.startAuctionMonitoring();
+
+      // Process existing auctions only after queue is fully initialized
+      await this.processExistingAuctions();
+    } catch (error) {
+      console.error('Failed to initialize queue:', error);
+      throw error;
+    }
   }
 
   initializeQueueHandlers() {
-    // Set up error handlers for all queues
-    [this.auctionEndQueue, this.notificationQueue].forEach(queue => {
-      queue.on('error', error => {
-        console.error(`Queue Error (${queue.name}):`, error);
-      });
+    this.auctionEndQueue.on('error', error => {
+      console.error(`Queue Error (${this.QUEUES.AUCTION_END}):`, error);
+    });
 
-      queue.on('failed', (job, error) => {
-        console.error(`Job Failed (${queue.name}, Job ID: ${job.id}):`, error);
-      });
+    this.auctionEndQueue.on('failed', (job, error) => {
+      console.error(`Job Failed (${this.QUEUES.AUCTION_END}, Job ID: ${job.id}):`, error);
+    });
 
-      // Add monitoring for stalled jobs
-      queue.on('stalled', (jobId) => {
-        console.warn(`Job stalled (${queue.name}, Job ID: ${jobId})`);
-      });
+    this.auctionEndQueue.on('stalled', (jobId) => {
+      console.warn(`Job stalled (${this.QUEUES.AUCTION_END}, Job ID: ${jobId})`);
+    });
+
+    this.auctionEndQueue.on('completed', (job, result) => {
+      console.log(`Auction End Job ${job.id} completed:`, result);
     });
   }
 
   setupProcessors() {
-    // Auction End Job Processor
-    this.auctionEndQueue.process(async (job) => {
+    console.log('Setting up processors...');
+    this.auctionEndQueue.process('auction-end', async (job) => {
+      console.log('Starting to process job:', job.id);
       const { listingId } = job.data;
+      console.log(`Processing auction end for listing ${listingId}`);
   
       try {
         // Find the listing
@@ -65,26 +99,37 @@ class QueueService {
           .populate('last_bid_user_id');
   
         if (!listing) {
+          console.error(`Listing not found: ${listingId}`);
           throw new Error(`Listing not found: ${listingId}`);
         }
   
         // Validate auction end conditions
-        if (listing.status !== 'active' || new Date() < listing.end_date) {
-          throw new Error(`Auction for listing ${listingId} not ready to be processed`);
+        if (listing.status !== 'active') {
+          console.log(`Listing ${listingId} is not active, current status: ${listing.status}`);
+          return { success: false, message: 'Listing is not active' };
         }
   
         // Process winning bid
         if (listing.last_bid_user_id) {
+          console.log(`Processing winning bid for listing ${listingId} by user ${listing.last_bid_user_id._id}`);
+          
           // Add to winner's cart
           await this.addToWinnerCart(listing);
   
           // Send notifications
           await this.sendAuctionEndNotifications(listing);
+        } else {
+          console.log(`No winning bid for listing ${listingId}`);
         }
+
+        // Update listing status
+        await Listing.findByIdAndUpdate(listingId, { status: 'expired' });
+        console.log(`Updated listing ${listingId} status to expired`);
   
         return { 
           success: true, 
-          message: `Auction ended for listing ${listingId}` 
+          message: `Auction ended for listing ${listingId}`,
+          hadWinner: !!listing.last_bid_user_id
         };
       } catch (error) {
         console.error('Auction end processing error:', error);
@@ -93,7 +138,64 @@ class QueueService {
     });
   }
 
+  async addToWinnerCart(listing) {
+    try {
+      console.log(`Attempting to add listing ${listing._id} to winner's cart`);
+      
+      // Check if item is already in cart
+      const existingCart = await Cart.findOne({
+        user: listing.last_bid_user_id._id,
+        'items.product': listing._id
+      });
+
+      if (existingCart) {
+        console.log(`Listing ${listing._id} is already in the cart of user ${listing.last_bid_user_id._id}`);
+        return;
+      }
+
+      // Add to winner's cart
+      await Cart.findOneAndUpdate(
+        { user: listing.last_bid_user_id._id },
+        { 
+          $push: { 
+            items: {
+              product: listing._id,
+              addedAt: new Date()
+            }
+          }
+        },
+        { upsert: true }
+      );
+
+      console.log(`Successfully added listing ${listing._id} to winner's cart`);
+    } catch (error) {
+      console.error('Error adding to winner cart:', error);
+      throw error;
+    }
+  }
+
+  async sendAuctionEndNotifications(listing) {
+    try {
+      console.log(`Sending auction end notifications for listing ${listing._id}`);
+
+      // Send notification to winner
+      await NotificationService.sendBidWonNotification(
+        listing.last_bid_user_id._id,
+        listing,
+        listing.current_bid
+      );
+      console.log(`Sent win notification to user ${listing.last_bid_user_id._id}`);
+
+      // Notify other bidders if needed
+      // You can add additional notification types here
+    } catch (error) {
+      console.error('Error sending notifications:', error);
+      throw error;
+    }
+  }
+
   startAuctionMonitoring() {
+    console.log('Starting auction monitoring');
     // Check for ending auctions every minute
     this.auctionCheckInterval = setInterval(async () => {
       try {
@@ -106,6 +208,8 @@ class QueueService {
           }
         });
 
+        console.log(`Found ${nearEndAuctions.length} auctions ending soon`);
+
         for (const auction of nearEndAuctions) {
           const delay = auction.end_date.getTime() - Date.now();
           await this.scheduleAuctionEnd(auction);
@@ -117,122 +221,36 @@ class QueueService {
     }, 60000); // Run every minute
   }
 
-  async addToWinnerCart(listing) {
-    try {
-      let cart = await Cart.findOne({ user: listing.last_bid_user_id });
-  
-      if (!cart) {
-        cart = new Cart({
-          user: listing.last_bid_user_id,
-          items: []
-        });
-      }
-  
-      // Check if the listing is already in the cart
-      const isAlreadyInCart = cart.items.some(item => 
-        item.product.toString() === listing._id.toString()
-      );
-  
-      if (!isAlreadyInCart) {
-        cart.items.push({
-          product: listing._id,
-          addedAt: new Date()
-        });
-  
-        await cart.save();
-      } else {
-        console.log(`Listing ${listing._id} is already in the cart of user ${listing.last_bid_user_id}`);
-      }
-    } catch (error) {
-      console.error('Error adding to winner cart:', error);
-      throw error;
-    }
-  }
-
-  async sendAuctionEndNotifications(listing) {
-    try {
-      // Seller notification
-      await this.notificationQueue.add({
-        userId: listing.seller_id._id, 
-        type: 'auction_sold',
-        message: `Your auction for "${listing.make} ${listing.model}" has been sold for $${listing.current_bid}`
-      });
-    
-      // Winner notification
-      if (listing.last_bid_user_id) {
-        await this.notificationQueue.add({
-          userId: listing.last_bid_user_id._id,
-          type: 'auction_won',
-          message: `Congratulations! You won the auction for "${listing.make} ${listing.model}" at $${listing.current_bid}`
-        });
-      }
-    } catch (error) {
-      console.error('Error sending notifications:', error);
-      throw error;
-    }
-  }
-
-  setupQueueEvents() {
-    // Auction End Queue Events
-    this.auctionEndQueue.on('completed', (job, result) => {
-      console.log(`Auction End Job ${job.id} completed:`, result);
-    });
-
-    // Notification Queue Processor
-    this.notificationQueue.process(async (job) => {
-      const { userId, type, message } = job.data;
-      
-      try {
-        console.log(`Sending notification to User ${userId}: ${message}`);
-        // Here you would typically integrate with your actual notification service
-        // For example: await notificationService.send(userId, message);
-      } catch (error) {
-        console.error(`Failed to send notification to user ${userId}:`, error);
-        throw error;
-      }
-    });
-  }
-
-  stopAuctionMonitoring() {
-    if (this.auctionCheckInterval) {
-      clearInterval(this.auctionCheckInterval);
-      this.auctionCheckInterval = null;
-    }
-  }
-
-  async scheduleAuctionEnd(listing) {
-    try {
-      const now = Date.now();
-      const endTime = listing.end_date.getTime();
-      const delay = Math.max(0, endTime - now);
-      
-      const jobId = `auction:${listing._id}`;
-      
-      // Check for existing job using a more specific ID
-      const existingJob = await this.auctionEndQueue.getJob(jobId);
-      
-      if (!existingJob) {
-        return this.auctionEndQueue.add(
-          { listingId: listing._id },
-          {
-            ...this.QUEUE_CONFIG.defaultJobOptions,
-            delay,
-            jobId // Use consistent job ID for deduplication
-          }
-        );
-      }
-    } catch (error) {
-      console.error('Error scheduling auction end:', error);
-      throw error;
-    }
-  }
-
   async processExistingAuctions() {
     try {
-      const batchSize = 100; // Process in batches to avoid memory issues
-      let processedCount = 0;
+      console.log('Processing existing expired auctions...');
       
-      // Use cursor-based pagination
+      // First, check for and handle any failed jobs
+      const failedJobs = await this.auctionEndQueue.getFailed();
+      if (failedJobs.length > 0) {
+        console.log(`Found ${failedJobs.length} failed jobs. Examining failures...`);
+        
+        for (const job of failedJobs) {
+          console.log(`Failed job ${job.id} details:`, {
+            failedReason: job.failedReason,
+            stacktrace: job.stacktrace,
+            data: job.data,
+            opts: job.opts
+          });
+          
+          // Retry failed jobs if they haven't exceeded max attempts
+          if (job.attemptsMade < job.opts.attempts) {
+            await job.retry();
+            console.log(`Retrying job ${job.id}`);
+          } else {
+            console.log(`Job ${job.id} has exceeded max attempts. Removing...`);
+            await job.remove();
+          }
+        }
+      }
+  
+      const batchSize = 100;
+      let processedCount = 0;
       let lastId = null;
       
       while (true) {
@@ -246,90 +264,143 @@ class QueueService {
           query._id = { $gt: lastId };
         }
         
-        const activeListings = await Listing.find(query)
+        const expiredListings = await Listing.find(query)
           .limit(batchSize)
           .sort({ _id: 1 });
           
-        if (activeListings.length === 0) break;
+        if (expiredListings.length === 0) break;
         
-        // Process batch
-        const jobs = activeListings.map(listing => ({
-          name: 'auction-end',
-          data: { listingId: listing._id },
-          opts: {
-            ...this.QUEUE_CONFIG.defaultJobOptions,
-            jobId: `auction:${listing._id}`
+        console.log(`Found ${expiredListings.length} expired listings to process`);
+        
+        // Process jobs sequentially
+        for (const listing of expiredListings) {
+          const jobId = `auction:${listing._id}`;
+          
+          // Check existing job and its state
+          const existingJob = await this.auctionEndQueue.getJob(jobId);
+          if (existingJob) {
+            const state = await existingJob.getState();
+            if (state === 'failed') {
+              console.log(`Retrying failed job ${jobId}`);
+              await existingJob.retry();
+            } else {
+              console.log(`Existing job ${jobId} found in state: ${state}`);
+            }
+            continue;
           }
-        }));
+  
+          // Add new job with enhanced error handling
+          const job = await this.auctionEndQueue.add('auction-end', 
+            { 
+              listingId: listing._id,
+              retryCount: 0  // Add retry counter
+            },
+            {
+              attempts: 3,
+              backoff: {
+                type: 'exponential',
+                delay: 2000  // Increased initial delay
+              },
+              timeout: 30000,
+              removeOnComplete: false,  // Keep completed jobs for debugging
+              removeOnFail: false      // Keep failed jobs for debugging
+            }
+          );
+          
+          console.log(`Added new job ${job.id} for listing ${listing._id}`);
+          
+          // Monitor initial job state
+          const jobState = await job.getState();
+          console.log(`Job ${job.id} initial state: ${jobState}`);
+          
+          // Wait briefly between jobs
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
         
-        await this.auctionEndQueue.addBulk(jobs);
+        // Log current queue status
+        const queueState = await this.getQueueHealth();
+        console.log('Current queue status:', queueState);
         
-        processedCount += activeListings.length;
-        lastId = activeListings[activeListings.length - 1]._id;
-        
-        console.log(`Processed ${processedCount} expired auctions`);
+        processedCount += expiredListings.length;
+        lastId = expiredListings[expiredListings.length - 1]._id;
       }
-
-      return {
-        success: true,
-        processedCount
-      };
+  
+      return { success: true, processedCount };
     } catch (error) {
       console.error('Error processing existing auctions:', error);
       throw error;
     }
   }
 
-  async cleanupOldJobs() {
+    // To check failed jobs
+  async checkFailedJobs() {
+    const failedJobs = await this.auctionEndQueue.getFailed();
+    for (const job of failedJobs) {
+      console.log('Failed job details:', {
+        id: job.id,
+        failedReason: job.failedReason,
+        attemptsMade: job.attemptsMade,
+        data: job.data
+      });
+    }
+  }
+
+  async scheduleAuctionEnd(listing) {
     try {
-      await this.auctionEndQueue.clean(24 * 3600 * 1000); // Clean jobs older than 24 hours
-      await this.notificationQueue.clean(24 * 3600 * 1000);
+      const now = Date.now();
+      const endTime = listing.end_date.getTime();
+      const delay = Math.max(0, endTime - now);
+      
+      const jobId = `auction:${listing._id}`;
+      
+      // Check for existing job
+      const existingJob = await this.auctionEndQueue.getJob(jobId);
+      
+      if (!existingJob) {
+        console.log(`Scheduling auction end for listing ${listing._id} with delay ${delay}ms`);
+        // IMPORTANT: Add the job type when adding a new job
+        return this.auctionEndQueue.add('auction-end', { listingId: listing._id }, {
+            ...this.QUEUE_CONFIG.defaultJobOptions,
+            delay,
+            jobId
+        });
+    } else {
+        console.log(`Job already exists for listing ${listing._id}`);
+      }
     } catch (error) {
-      console.error('Error cleaning up old jobs:', error);
+      console.error('Error scheduling auction end:', error);
       throw error;
     }
   }
 
-  // Add health check method
   async getQueueHealth() {
-    const queues = {
-      'auction-end': this.auctionEndQueue,
-      'notifications': this.notificationQueue
-    };
+    const [waiting, active, completed, failed] = await Promise.all([
+      this.auctionEndQueue.getWaitingCount(),
+      this.auctionEndQueue.getActiveCount(),
+      this.auctionEndQueue.getCompletedCount(),
+      this.auctionEndQueue.getFailedCount()
+    ]);
     
-    const health = {};
-    
-    for (const [name, queue] of Object.entries(queues)) {
-      const [waiting, active, completed, failed] = await Promise.all([
-        queue.getWaitingCount(),
-        queue.getActiveCount(),
-        queue.getCompletedCount(),
-        queue.getFailedCount()
-      ]);
-      
-      health[name] = {
+    return {
+      'auction-end': {
         waiting,
         active,
         completed,
         failed,
         status: failed > 0 ? 'warning' : 'healthy'
-      };
-    }
-    
-    return health;
+      }
+    };
   }
 
-  // Add graceful shutdown method
   async shutdown() {
-    this.stopAuctionMonitoring();
+    console.log('Shutting down queue service...');
+    if (this.auctionCheckInterval) {
+      clearInterval(this.auctionCheckInterval);
+      this.auctionCheckInterval = null;
+    }
     
-    // Close all queues
-    await Promise.all([
-      this.auctionEndQueue.close(),
-      this.notificationQueue.close()
-    ]);
-    
-    await this.cleanupOldJobs();
+    await this.auctionEndQueue.close();
+    console.log('Queue service shutdown complete');
   }
 }
 

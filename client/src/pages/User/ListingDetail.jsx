@@ -10,7 +10,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { addToWishlistAsync, fetchWishlist, removeFromWishlistAsync } from '../../redux/wishlistSlice';
 import { addToCart, fetchCart, removeFromCart } from '../../redux/cartSlice';
 import { useSocket } from '../../utils/socketContext';
-import Cookies from 'js-cookie';
 
 const ListingDetail = () => {
   const [listing, setListing] = useState(null);
@@ -28,7 +27,7 @@ const ListingDetail = () => {
   const dispatch = useDispatch();
   const socket = useSocket();
   const { id } = useParams();
-  const userId = useSelector((state) => state.auth.user.id);
+  const userId = useSelector((state) => state.auth.user?.id);
 
   useEffect(() => {
     const fetchListing = async () => {
@@ -60,6 +59,8 @@ const ListingDetail = () => {
     };
 
     const checkIfWishlisted = async () => {
+      if (!userId) return;
+
       try {
         const resultAction = await dispatch(fetchWishlist());
         
@@ -85,6 +86,8 @@ const ListingDetail = () => {
     };
 
     const checkIfInCart = async () => {
+      if (!userId) return;
+
       try {
         const resultAction = await dispatch(fetchCart());
 
@@ -118,7 +121,7 @@ const ListingDetail = () => {
   }, [id,dispatch]);
 
   useEffect(() => {
-    if (socket) {
+    if (socket && userId) {
         setSocketReady(true);
         socket.on('newMessage', (data) => {
             console.log('Message sent successfully', data);
@@ -135,7 +138,7 @@ const ListingDetail = () => {
             socket.off('messageError');
         };
     }
-  }, [socket]);
+  }, [socket, userId]);
 
   if (loading) {
     return (
@@ -215,6 +218,11 @@ const ListingDetail = () => {
   };
 
   const handleAddToCart = async () => {
+    if (!userId) {
+      toast.error('Please login to add items to cart');
+      return;
+    }
+
     try {
       if (isInCart) {
         dispatch(removeFromCart(id));
@@ -233,6 +241,16 @@ const ListingDetail = () => {
   };
 
   const handleBid = async () => {
+    if (!userId) {
+      toast.error('Please login to place bids');
+      return;
+    }
+    
+    if(userId === listing.seller_id._id){
+      toast.error('Sellers cannot place bid on their listings')
+      return
+    }
+
     const now = new Date().getTime();
     const endDate = new Date(listing.end_date).getTime();
     
@@ -269,6 +287,11 @@ const ListingDetail = () => {
   };
 
   const handleWishlist = async () => {
+    if (!userId) {
+      toast.error('Please login to add items to wishlist');
+      return;
+    }
+
     try {
       if (isWishlisted) {
         dispatch(removeFromWishlistAsync(id));
@@ -306,6 +329,11 @@ const ListingDetail = () => {
 
   const handleSendMessage = (e) => {
     e.preventDefault();
+
+    if (!userId) {
+      toast.error('Please login to send messages');
+      return;
+    }
 
     if (!message.trim()) {
         return;
@@ -525,21 +553,32 @@ const ListingDetail = () => {
 
           <div className='mt-8'>
           <h2 className="text-xl font-semibold mb-4">Have a question?</h2>
-          <form onSubmit={handleSendMessage} className="flex gap-2">
-                <input
-                    type="text"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Type your question..."
-                    className="flex-1 p-2 border rounded"
-                />
-                <button 
-                    type="submit"
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                    Send
-                </button>
+         {userId ? (
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+              <input
+                type="text"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Type your question..."
+                className="flex-1 p-2 border rounded"
+              />
+              <button 
+                type="submit"
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Send
+              </button>
             </form>
+          ) : (
+            <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-lg">
+              <p className="text-gray-600">Please <button 
+                onClick={() => navigate('/login')}
+                className="text-blue-500 hover:underline"
+              >
+                login
+              </button> to send messages to the seller</p>
+            </div>
+          )}
           </div>
             
 

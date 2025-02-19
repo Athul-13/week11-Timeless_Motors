@@ -1,5 +1,7 @@
 const Bid = require('../models/Bids');
 const Listing = require('../models/Listing');
+const NotificationService = require('../services/notificationServices');
+const logActivity = require('../utils/logActivity');
 
 exports.placeBid = async (req, res) => {
     try {
@@ -32,6 +34,9 @@ exports.placeBid = async (req, res) => {
             return res.status(400).json({ message: `Bid must be at least ₹${minBid}` });
         }
 
+        // Get the previous highest bidder (if any)
+        const previousHighestBidder = listing.last_bid_user_id;
+
         // Create new bid
         const bid = new Bid({
             listing_id: listingId,
@@ -48,6 +53,16 @@ exports.placeBid = async (req, res) => {
         const details = `User placed a bid of ₹${amount} on ${listing.make} ${listing.model} (${listing.year})`;
         await logActivity(req.user._id, "Bid Placed", details, req);
 
+        // Send notification to the previous highest bidder
+        if (previousHighestBidder && previousHighestBidder.toString() !== user._id.toString()) {
+            await NotificationService.sendNotification(previousHighestBidder, 'overbid', {
+                listingId: listingId,
+                title: 'You have been outbid!',
+                description: `Your bid on ${listing.make} ${listing.model} (${listing.year}) has been surpassed by another bidder.`,
+                newBidAmount: amount
+            });
+        }
+
         return res.status(201).json({
             message: 'Bid placed successfully',
             currentBid: amount
@@ -61,11 +76,9 @@ exports.placeBid = async (req, res) => {
 
 exports.getBidsByListing = async (req, res) => {
     try {
-        console.log('req',req.params);
       const bids = await Bid.find({ listing_id: req.params.listingId })
         .populate('user_id', 'first_name last_name')
         .sort('-createdAt');
-        console.log('bid',bids);
   
       res.status(200).json({
         success: true,

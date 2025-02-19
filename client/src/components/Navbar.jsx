@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
-import { Menu, X, ShoppingCart, Heart, Bell, LogOut, Trophy, ShoppingBag } from "lucide-react";
+import { Menu, X, ShoppingCart, Heart, Bell, LogOut, Trophy, ShoppingBag, TrendingUp, Clock, Gavel, AlertCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from "../redux/authSlice";
@@ -48,7 +48,7 @@ const NotificationDropdown = forwardRef(({ notifications, onClose, onMarkAsRead 
             </div>
           </div>
         );
-
+  
       case 'bid_won':
         return (
           <div
@@ -73,7 +73,102 @@ const NotificationDropdown = forwardRef(({ notifications, onClose, onMarkAsRead 
             </div>
           </div>
         );
-
+  
+      case 'bid_lost':
+        return (
+          <div
+            className="block p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+            onClick={() => handleNotificationClick(notification, () =>
+              navigate(`/listings/${notification.data.listingId._id}`)
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <p className="font-medium text-red-600">Bid Lost</p>
+                <p className="text-sm">
+                  {notification.data.listingId.make} {notification.data.listingId.model}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Final price: ${notification.data.bidAmount.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+  
+      case 'bid_placed':
+        return (
+          <div
+            className="block p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+            onClick={() => handleNotificationClick(notification, () =>
+              navigate(`/listings/${notification.data.listingId._id}`)
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                <Gavel className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <p className="font-medium text-purple-600">Bid Placed</p>
+                <p className="text-sm">
+                  {notification.data.listingId.make} {notification.data.listingId.model}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Your bid: ${notification.data.bidAmount.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+  
+      case 'listing_ended':
+        return (
+          <div
+            className="block p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+            onClick={() => handleNotificationClick(notification, () =>
+              navigate(`/listings/${notification.data.listingId._id}`)
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                <Clock className="w-6 h-6 text-gray-600" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-600">Listing Ended</p>
+                <p className="text-sm">
+                  {notification.data.listingId.make} {notification.data.listingId.model}
+                </p>
+                <p className="text-sm text-gray-600">{notification.data.description}</p>
+              </div>
+            </div>
+          </div>
+        );
+  
+      case 'overbid':
+        return (
+          <div
+            className="block p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+            // onClick={() => handleNotificationClick(notification, () =>
+            //   navigate(`/listings/${notification.data.listingId._id}`)
+            // )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div>
+                <p className="font-medium text-yellow-600">You've Been Outbid!</p>
+                <p className="text-sm">
+                  {notification.data.description}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+  
       case 'order_received':
         return (
           <div
@@ -94,7 +189,7 @@ const NotificationDropdown = forwardRef(({ notifications, onClose, onMarkAsRead 
             </div>
           </div>
         );
-
+  
       default:
         return null;
     }

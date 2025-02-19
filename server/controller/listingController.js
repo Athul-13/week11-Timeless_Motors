@@ -1,4 +1,5 @@
 const Listing = require('../models/Listing');
+const logActivity = require('../utils/logActivity');
 
 const VALID_STATUSES = ['active', 'sold', 'pending start'];
 

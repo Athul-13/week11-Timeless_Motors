@@ -2,20 +2,26 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
+const paymentRoutes = require('./routes/paymentRoutes.js')
+const walletRoutes = require('./routes/walletRoutes.js')
+const PDFRoutes = require('./routes/PDFRoutes.js')
+const excelRoutes = require('./routes/excelRoutes.js')
 const cookieParser = require('cookie-parser');
 const initializeSocket = require('./socket/socketConfig');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const http = require('http'); 
 const KYC = require("./models/KYC.js");
+const path = require("path");
 require('dotenv').config();
 
 const queueService = require('./services/queueService.js');
-
+const NotificationService = require('./services/notificationServices.js');
 
 const app = express();
 const server = http.createServer(app);
 const io = initializeSocket(server);
+NotificationService.initialize(io);
 
 connectDB();
 
@@ -117,10 +123,27 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
 app.use('/api/auth', authRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/PDF', PDFRoutes)
+app.use('/api/excel', excelRoutes)
+app.use("/reports", express.static(path.join(__dirname, "public/reports")));
 
 app.get('/api/queue-health', async (req, res) => {
-  const health = await queueService.getQueueHealth();
-  res.json(health);
+  try {
+      const health = await queueService.getQueueHealth();
+      res.json({
+          status: 'success',
+          timestamp: new Date().toISOString(),
+          queues: health
+      });
+  } catch (error) {
+      res.status(500).json({
+          status: 'error',
+          message: 'Failed to get queue health',
+          error: error.message
+      });
+  }
 });
 
 app.use((req, res) => {
@@ -138,8 +161,20 @@ process.on('SIGTERM', async () => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, async ()=>{
-    console.log(`console is running on port: http://localhost:${PORT}`);
-
-    await queueService.processExistingAuctions();
-})
+server.listen(PORT, async () => {
+    try {
+        console.log(`Server is running on port: http://localhost:${PORT}`);
+        
+        // Process existing auctions
+        console.log('Processing existing auctions...');
+        const result = await queueService.processExistingAuctions();
+        console.log('Auction processing result:', result);
+        
+        // Log queue health after initialization
+        const health = await queueService.getQueueHealth();
+        console.log('Initial queue health:', health);
+    } catch (error) {
+        console.error('Error during server startup:', error);
+      
+    }
+});

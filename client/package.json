@@ -10,10 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emoji-mart/data": "^1.2.1",
+    "@emoji-mart/react": "^1.1.1",
     "@react-oauth/google": "^0.12.1",
     "@reduxjs/toolkit": "^2.5.0",
     "@tanstack/react-table": "^8.20.6",
     "axios": "^1.7.9",
+    "embla-carousel-react": "^8.5.2",
     "joi": "^17.13.3",
     "js-cookie": "^3.0.5",
     "jwt-decode": "^4.0.0",
