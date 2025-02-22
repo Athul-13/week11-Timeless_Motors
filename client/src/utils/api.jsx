@@ -323,10 +323,9 @@ export const listingService = {
             console.error('Error fetching bids', error);
         }
     },
-    getBidsByUser: async () => {
+    getBidsByUser: async (page=1, limit=1) => {
         try {
-            const response = await api.get('/auth/mybids');
-            console.log('resp',response.data.data);
+            const response = await api.get(`/auth/mybids?page=${page}&limit=${limit}`);
             return response.data;
         } catch (error) {
             console.error('Error while fetching list', error);
@@ -345,17 +344,23 @@ export const orderService = {
       const response = await api.get(`/auth/order/${orderId}`);
       return response.data;
     },
-    getUserOrders: async () => {
-      const response = await api.get('/auth/order');
+    getUserOrders: async (page=1, limit=1) => {
+      const response = await api.get(`/auth/order?page=${page}&limit=${limit}`);
       return response.data;
     },
-    getSellerOrders: async () => {
-        const response = await api.get('/auth/seller-orders');
+    getSellerOrders: async (page=1, limit=1) => {
+        const response = await api.get(`/auth/seller-orders?page=${page}&limit=${limit}`);
         return response.data;
     },
     getAllOrders: async () => {
         const response = await api.get('/auth/orders');
+        console.log('api',response.data);
         return response.data;
+    },
+    updateOrder: async (orderId, updatedData) => {
+        console.log('inapi',updatedData);
+        const response = await api.put(`/auth/orders/${orderId}/update`, updatedData)
+        return response.data
     },
     updateOrderStatus: async (orderId, newStatus) => {
         const response = await api.put(`/auth/orders/${orderId}/status`, { status: newStatus });
@@ -365,12 +370,26 @@ export const orderService = {
         const response = await api.put(`/auth/orders/${orderId}/payment-status`, { status: newStatus });
         return response.data;
     },
+    checkProductAvailability: async(listingId) => {
+        const response = await api.get(`/auth/listing/${listingId}/status-check`);
+        return response.data;
+    },
     createRazorpayOrder: async (data) => {
         const response = await api.post('/payment/create-order',data);
+        console.log('res',response.data);
         return response.data;
     },
     verifyPayment: async (data) => {
         const response = await api.post('/payment/verify-payment', data);
+        console.log('resp',response.data);
+        return response.data;
+    },
+    orderCancellation: async (orderId, data) => {
+        const response = await api.put(`/auth/orders/${orderId}/order-cancellation`, data);
+        return response.data;
+    },
+    orderReturn: async (orderId, data) => {
+        const response = await api.put(`/auth/orders/${orderId}/order-return`, data);
         return response.data;
     }
 };
@@ -630,6 +649,10 @@ export const adminServices = {
     generateExcelReport: async (params) => {
         const response = await api.get(`/excel/generate-sales-report-excel?${params}`);
         return response.data;
+    },
+    generateInvoice: async (params) => {
+        const response = await api.get(`/invoice/generate-invoice/${params}`);
+        return response.data;
     }
 }
 
@@ -638,8 +661,8 @@ export const walletService = {
         const response = await api.get('/wallet/balance');
         return response.data;
     },
-    fetchTransactions: async() => {
-        const response = await api.get('/wallet/transactions');
+    fetchTransactions: async(page, limit) => {
+        const response = await api.get(`/wallet/transactions?page=${page}&limit=${limit}`);
         return response.data;
     },
     fetchAllTransactions: async() => {
@@ -667,6 +690,21 @@ export const notificationService = {
     },
     markAllAsRead: async () => {
         const response = await api.post('/auth/notifications/mark-all-read');
+        return response.data;
+    }
+}
+
+export const FAQService = {
+    getPopularFAQS: async () => {
+        const response = await api.get('/FAQ/popular-questions');
+        return response.data;
+    },
+    searchFAQs: async (query) => {
+        const response = await api.get(`/FAQ/searchFAQ/${query}`);
+        return response.data;
+    },
+    suggestions: async (searchQuery) => {
+        const response = await api.get(`/FAQ/suggestions/${searchQuery}`);
         return response.data;
     }
 }

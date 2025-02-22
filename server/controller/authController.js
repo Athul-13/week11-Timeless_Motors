@@ -258,9 +258,11 @@ exports.googleAuth = async (req, res) => {
     });
     
     const payload = ticket.getPayload();
-    console.log('Google payload:', payload);
 
     const { email, given_name, family_name, picture } = payload;
+
+    const profilePicture = picture ? encodeURI(picture) : null;
+
 
     // Check if user exists
     let user = await User.findOne({ email });
@@ -271,7 +273,7 @@ exports.googleAuth = async (req, res) => {
         email,
         first_name: given_name,
         last_name: family_name,
-        profilePicture: picture,
+        profile_picture: profilePicture,
         status: 'active',
         role: 'user',
         password: crypto.randomBytes(16).toString('hex') // Generate random password for Google users
@@ -312,8 +314,8 @@ exports.googleAuth = async (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         email: user.email,
-        profilePicture: user.profilePicture,
-        status: user.status,
+        profilePicture: user.profile_picture,
+        status: user.status, 
         role: user.role
       },
       accessToken

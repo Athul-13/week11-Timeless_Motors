@@ -80,8 +80,10 @@ const LandingPage = () => {
         </div>
 
         {/* Record Price Section */}
-        {/* <div className="mb-16"> */}
-        < RecordPriceCarousel />
+        <div>
+         < RecordPriceCarousel />
+        </div>
+        
           
 
         {/* Live Auctions Section */}
@@ -101,7 +103,7 @@ const LandingPage = () => {
                     <div 
                       key={listing._id} 
                       onClick={() => navigate(`/listing/${listing._id}`)}
-                      className="cursor-pointer"
+                      className="cursor-pointer transition-transform duration-300 hover:scale-105"
                     >
                       <CarCard listing={listing} />
                     </div>

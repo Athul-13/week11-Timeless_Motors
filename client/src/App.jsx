@@ -43,6 +43,7 @@ import SalesReport from "./pages/Admin/SalesReport";
 import Transactions from "./pages/User/Transactions";
 import AllTransactions from "./pages/Admin/AllTransactions";
 import MySales from "./pages/User/MySales";
+import FAQPage from "./pages/FAQPage";
 
 
 
@@ -122,6 +123,10 @@ export default function App () {
             <PrivateRoute>
               < OrderConfirmation />
             </PrivateRoute>
+          } />
+
+          <Route path="/faqs" element={
+            < FAQPage />
           } />
 
           <Route path="/about" element={

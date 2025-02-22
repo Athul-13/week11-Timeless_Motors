@@ -4,10 +4,10 @@ const Listing = require('../models/Listing');
 const Cart = require('../models/Cart');
 const Wallet = require('../models/Wallet')
 const logActivity = require('../utils/logActivity');
-const { createLedgerEntry, handleOrderSettlement } = require('./walletController');
+const { createLedgerEntry, handleOrderSettlement, handleOrderRefund } = require('./walletController');
 
 // Helper for cleanup after successful order
-const cleanupAfterPurchase = async (userId, listingId, session) => {
+const cleanupAfterPurchase = async (userId, listingId) => {
   try {
     // Remove from cart
     await Cart.updateOne(
@@ -59,6 +59,11 @@ exports.createOrder = async (req, res) => {
       razorpay_payment_id
     } = req.body;
 
+    const paymentStatus = 
+      payment.method === 'razorpay' && req.body.payment && req.body.payment.status
+        ? req.body.payment.status
+        : (payment.method === 'cod' ? 'Processing' : 'Completed');
+
     // Validate user and listing existence
     const [user, listing] = await Promise.all([
       User.findById(userId),
@@ -67,6 +72,10 @@ exports.createOrder = async (req, res) => {
 
     if (!user || user.status !== 'verified') {
       throw new Error('User not found or not verified');
+    }
+
+    if(!listing || listing.status === 'sold') {
+      throw new Error('Listing is already sold');
     }
 
     // Validate listing and order type
@@ -135,7 +144,7 @@ exports.createOrder = async (req, res) => {
       totalAmount,
       payment: {
         method: payment.method,
-        status: payment.method === 'cod' ? 'Pending' : 'Completed',
+        status: paymentStatus,
         razorpay_order_id,
         razorpay_payment_id
       },
@@ -197,6 +206,22 @@ exports.createOrder = async (req, res) => {
   }
 };
 
+exports.checkProductStatus = async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    console.log(listingId);
+    const listing = await Listing.findById(listingId);
+
+    if (!listing) {
+      return res.status(404).json({ success: false, message: 'Listings not found' });
+    }
+
+    return res.status(200).json({ success: true, data: listing });
+  } catch (error) {
+    console.error('Error checking listing status:', error);
+    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};
 
 exports.getOrder = async (req, res) => {
   try {
@@ -216,8 +241,6 @@ exports.getOrder = async (req, res) => {
       });
     }
 
-    console.log('order',order);
-
     const details = `User placed an order for ${order.make} ${order.model} (${order.year}) for ₹${order.totalAmount}`;
 
     return res.status(200).json({
@@ -236,15 +259,27 @@ exports.getOrder = async (req, res) => {
 exports.getOrderByUser = async (req, res) => {
   try {
     const userId = req.user._id;
-
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const skip = (page - 1) * limit;
     
     const orders = await Order.find({ user: userId })
       .populate('product', 'make model year')
-      .sort({ createdAt: -1 }); 
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+      const totalCount = await Order.countDocuments({ user: req.user.id });
+      const totalPages = Math.ceil(totalCount / limit);
 
     res.status(200).json({
       success: true,
-      data: orders,
+      data: {
+        orders,
+        totalCount,
+        totalPages,
+        currentPage: page
+      }
     });
   } catch (error) {
     console.error('Error fetching user orders:', error);
@@ -258,6 +293,9 @@ exports.getOrderByUser = async (req, res) => {
 exports.getSellerOrders = async (req, res) => {
   try {
     const userId = req.user._id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const skip = (page - 1) * limit;
 
     // First find all listings by this seller
     const sellerListings = await Listing.find({ seller_id: userId });
@@ -266,11 +304,23 @@ exports.getSellerOrders = async (req, res) => {
     // Then find all orders for these listings
     const sellerOrders = await Order.find({
       product: { $in: listingIds }
-    }).populate('product').exec();
+    }).populate('product')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+      const totalCount = await Order.countDocuments({ user: req.user.id });
+      const totalPages = Math.ceil(totalCount / limit);
 
     res.status(200).json({
       success: true,
-      sellerOrders,
+      data: {
+        sellerOrders,
+        totalCount,
+        totalPages,
+        currentPage: page
+      }
+      
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -280,8 +330,16 @@ exports.getSellerOrders = async (req, res) => {
 exports.getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find()
-      .populate('user', 'first_name last_name email phone_no') 
-      .populate('product', 'make model year fuel_type images');
+      .populate('user', 'first_name last_name email phone_no') // Populate buyer details
+      .populate({
+        path: 'product',
+        select: 'make model year fuel_type images seller_id', // Include seller_id for next population
+        populate: {
+          path: 'seller_id', 
+          select: 'first_name last_name' // Populate seller details
+        }
+      });
+
 
     res.status(200).json({
       success: true,
@@ -295,6 +353,93 @@ exports.getAllOrders = async (req, res) => {
     });
   }
 };
+
+exports.updateOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const reqBody = req.body; // Store req.body for easier access
+
+    const razorpay_order_id = reqBody["payment.razorpay_order_id"];
+    const razorpay_payment_id = reqBody["payment.razorpay_payment_id"];
+    const razorpay_signature = reqBody["payment.razorpay_signature"];
+    const paymentStatus = reqBody["payment.status"];
+    const paymentAttempt = reqBody["$push"]?.["payment.paymentAttempts"];
+
+    // Validate request
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Order ID is required'
+      });
+    }
+
+    // Find the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Prepare base update object
+    const updateData = {};
+
+    // Handle payment success case
+    if (paymentStatus === 'Completed') {
+      updateData.$set = {
+        'payment.razorpay_order_id': razorpay_order_id,
+        'payment.razorpay_payment_id': razorpay_payment_id,
+        'payment.razorpay_signature': razorpay_signature,
+        'payment.status': 'Completed',
+        'payment.paidAt': new Date()
+      };
+    }
+
+    // Add payment attempt to history
+    updateData.$push = {
+      'payment.paymentAttempts': {
+        attemptedAt: new Date(),
+        status: paymentStatus,
+        error: paymentAttempt.error || null
+      }
+      
+    };
+
+    // Update the order
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      updateData,
+      { 
+        new: true,
+        runValidators: true 
+      }
+    );
+
+    if (!updatedOrder) {
+      return res.status(400).json({
+        success: false,
+        message: 'Failed to update order'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: paymentStatus === 'Completed' 
+        ? 'Payment completed and order updated successfully'
+        : 'Payment attempt recorded successfully',
+      order: updatedOrder
+    });
+
+  } catch (error) {
+    console.error('Order Update Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+}
 
 exports.updateOrderStatus = async (req, res) => {
   try {
@@ -342,25 +487,7 @@ exports.updateOrderStatus = async (req, res) => {
           message: 'Failed to process settlement for delivered order',
         });
       }
-    } else if (status === 'Refunded' && order.orderStatus !== 'Refunded') {
-      try {
-        await handleOrderRefund({
-          orderId: updatedOrder._id,
-          orderAmount: updatedOrder.totalAmount,
-          sellerId: updatedOrder.product.seller,
-          buyerId: updatedOrder.user._id,
-          adminId: process.env.ADMIN_USER_ID,
-          refundFeePercentage: 5,
-          productId: updatedOrder.product._id
-        });
-      } catch (refundError) {
-        console.error('Refund Error:', refundError);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to process refund',
-        });
-      }
-    }  
+    }
 
     return res.status(200).json({
       success: true,
@@ -396,7 +523,7 @@ exports.updatePaymentStatus = async (req, res) => {
       { 'payment.status': status },
       { new: true }
     ).populate('user', 'first_name last_name email phone_no')
-     .populate('product', 'make model year fuel_type images');
+     .populate('product', 'make model year fuel_type images seller_id');
 
     if (!updatedOrder) {
       return res.status(404).json({
@@ -404,6 +531,38 @@ exports.updatePaymentStatus = async (req, res) => {
         message: 'Order not found',
       });
     }
+
+    if (status === 'Refunded' && existingOrder.payment.status !== 'Completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Refund can only be processed if the payment was completed.',
+      });
+    }
+
+    // Update payment status
+    existingOrder.payment.status = status;
+    await existingOrder.save();
+
+    // Process refund if applicable
+    if (status === 'Refunded') {
+      try {
+        await handleOrderRefund({
+          orderId: existingOrder._id,
+          orderAmount: existingOrder.totalAmount,
+          sellerId: existingOrder.product.seller_id,
+          buyerId: existingOrder.user._id,
+          adminId: process.env.ADMIN_USER_ID,
+          refundFeePercentage: 5,
+          productId: existingOrder.product._id,
+        });
+      } catch (refundError) {
+        console.error('Refund Error:', refundError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to process refund',
+        });
+      }
+    } 
 
     return res.status(200).json({
       success: true,
@@ -419,3 +578,104 @@ exports.updatePaymentStatus = async (req, res) => {
   }
 };
 
+exports.cancelOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reason, description } = req.body;
+
+    // Find the existing order
+    const existingOrder = await Order.findById(orderId);
+    if (!existingOrder) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found',
+      });
+    }
+
+    // Allow cancellation only if order status is Pending or Processing
+    if (!['Pending', 'Processing'].includes(existingOrder.orderStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only orders in Pending or Processing status can be cancelled',
+      });
+    }
+
+    // Update order status to Cancelled with cancellation details
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      {
+        orderStatus: 'Cancelled',
+        cancellation: {
+          reason,
+          description,
+          requestedAt: new Date(),
+        },
+        'timestamps.cancelledAt': new Date(),
+      },
+      { new: true }
+    ).populate('user', 'first_name last_name email phone_no')
+     .populate('product', 'make model year fuel_type images seller_id');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Order has been cancelled successfully',
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error('Cancel Order Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to cancel order',
+    });
+  }
+};
+
+
+exports.returnOrder = async(req, res) => {
+  try {
+    const {orderId} = req.params;
+    const {reason, description} = req.body;
+    console.log('body',req.body);
+
+    const existingOrder = await Order.findById(orderId);
+    if (!existingOrder) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found',
+      });
+    }
+
+    // Check if the order was delivered before allowing a refund
+    if (existingOrder.orderStatus !== 'Delivered') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only delivered orders can be refunded',
+      });
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      { 
+        orderStatus: 'Refunded',
+        cancellation: {
+          reason,
+          description,
+          requestedAt: new Date(),
+        }
+      },
+      { new: true }
+    ).populate('user', 'first_name last_name email phone_no')
+     .populate('product', 'make model year fuel_type images seller_id');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Order has been returned successfully',
+      order: updatedOrder,
+    });
+  } catch {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update order status',
+    });
+  }
+}

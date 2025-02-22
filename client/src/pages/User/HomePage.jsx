@@ -8,6 +8,7 @@ import Navbar from "../../components/Navbar";
 import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { listingService } from '../../utils/api';
+import RecordPriceCarousel from '../../components/RecordPriceCarousel';
 
 const CarCard = ({ listing }) => {
   return (
@@ -85,77 +86,8 @@ const HomePage = () => {
         </div>
 
         {/* Record Price Section */}
-        <div className="mb-16">
-            <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-semibold">Record Price</h2>
-            <div className="flex gap-2">
-                <button className="p-2 rounded-full hover:bg-gray-100">
-                <ChevronLeft size={24} />
-                </button>
-                <button className="p-2 rounded-full hover:bg-gray-100">
-                <ChevronRight size={24} />
-                </button>
-            </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Car 1 */}
-            <div className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div className="aspect-video w-full overflow-hidden mb-4">
-                <img
-                    src={buick}
-                    alt="1949 Buick Super"
-                    className="w-full h-full object-cover"
-                />
-                </div>
-                <h3 className="text-lg font-medium mb-2">1949 Buick Super</h3>
-                <div className="flex justify-between items-baseline mb-2">
-                <div className="text-lg font-semibold">₹ 76,925.00</div>
-                <div className="text-sm text-gray-600">10 Bids</div>
-                </div>
-                <div className="text-sm text-gray-600">
-                <div>Inclusive 15% Margin</div>
-                </div>
-            </div>
-
-            {/* Car 2 */}
-            <div className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div className="aspect-video w-full overflow-hidden mb-4">
-                <img
-                    src={bently}
-                    alt="2001 Bentley Continental Le Mans"
-                    className="w-full h-full object-cover"
-                />
-                </div>
-                <h3 className="text-lg font-medium mb-2">2001 Bentley Continental Le Mans</h3>
-                <div className="flex justify-between items-baseline mb-2">
-                <div className="text-lg font-semibold">₹ 69,425.00</div>
-                <div className="text-sm text-gray-600">18 Bids</div>
-                </div>
-                <div className="text-sm text-gray-600">
-                <div>Inclusive 15% Margin</div>
-                </div>
-            </div>
-
-            {/* Car 3 */}
-            <div className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div className="aspect-video w-full overflow-hidden mb-4">
-                <img
-                    src={RR}
-                    alt="Rolls Royce Silver Spirit"
-                    className="w-full h-full object-cover"
-                />
-                </div>
-                <h3 className="text-lg font-medium mb-2">Rolls Royce Silver Spirit</h3>
-                <div className="flex justify-between items-baseline mb-2">
-                <div className="text-lg font-semibold">₹ 200,591.00</div>
-                <div className="text-sm text-gray-600">29 Bids</div>
-                </div>
-                <div className="text-sm text-gray-600">
-                <div>Inclusive 15% Margin</div>
-                </div>
-            </div>
-            </div>
+        <div>
+         < RecordPriceCarousel />
         </div>
 
         {/* Live Auctions Section */}
@@ -175,7 +107,7 @@ const HomePage = () => {
                     <div 
                       key={listing._id} 
                       onClick={() => navigate(`/listing/${listing._id}`)}
-                      className="cursor-pointer"
+                      className="cursor-pointer transition-transform duration-300 hover:scale-105"
                     >
                       <CarCard listing={listing} />
                     </div>

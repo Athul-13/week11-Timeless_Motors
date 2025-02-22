@@ -28,7 +28,7 @@ const Overview = () => {
   
     fetchBalance();
   }, []);
-
+  
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -39,16 +39,15 @@ const Overview = () => {
           listingService.getListingsByUser(),
           orderService.getSellerOrders()
         ]);
-        console.log('seller',sellerOrders);
 
         const isSeller = listings && listings.data.length > 0;
-        
+
         setUserData({
           isSeller,
           profile,
-          orders: buyerOrders || { data: [] },
+          orders: buyerOrders.data.orders || [],
           listings: listings.data || [],
-          sellerOrders: sellerOrders.sellerOrders || { data: [] }, // Fixed: Now using sellerOrders
+          sellerOrders: sellerOrders.data.sellerOrders || { data: [] },
           loading: false
         });
       } catch (error) {
@@ -60,6 +59,7 @@ const Overview = () => {
     fetchUserData();
   }, []);
 
+
   if (userData.loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -69,8 +69,8 @@ const Overview = () => {
   }
 
   // Calculate buyer metrics
-  const totalSpent = userData.orders.data.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-  const totalOrders = userData.orders.data.length;
+  const totalSpent = userData.orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+  const totalOrders = userData.orders.length;
   
   // Calculate seller metrics if applicable
   const activeListings = userData.isSeller ? 
@@ -79,7 +79,6 @@ const Overview = () => {
 
   // Process order data for charts - include both buyer and seller orders if applicable
   const processOrderData = (orders, isBuyer = true) => {
-    console.log('order',orders);
     return orders.reduce((acc, order) => {
       const date = new Date(order.timestamps.orderedAt).toLocaleDateString('en-US', { weekday: 'short' });
       if (!acc[date]) {
@@ -91,12 +90,12 @@ const Overview = () => {
     }, {});
   };
 
-  const buyerOrdersByDate = processOrderData(userData.orders.data);
+  const buyerOrdersByDate = processOrderData(userData.orders);
   const sellerOrdersByDate = userData.isSeller ? 
     processOrderData(userData.sellerOrders, false) : {};
 
   // Combine buyer and seller order status data
-  const orderStatusData = [...userData.orders.data, ...(userData.isSeller ? userData.sellerOrders : [])]
+  const orderStatusData = [...userData.orders, ...(userData.isSeller ? userData.sellerOrders : [])]
     .reduce((acc, order) => {
       if (!acc[order.orderStatus]) {
         acc[order.orderStatus] = { status: order.orderStatus, count: 0 };

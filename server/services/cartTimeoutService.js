@@ -12,7 +12,7 @@ class CartTimeoutService {
       NOTIFICATIONS: 'notifications'
     };
 
-    this.CART_TIMEOUT = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+    this.CART_TIMEOUT = 48 * 60 * 60 * 1000;  // 48 hours in milliseconds
 
     this.cartTimeoutQueue = new Queue(this.QUEUES.CART_TIMEOUT, { redis: redisConfig });
 
@@ -26,7 +26,7 @@ class CartTimeoutService {
       try {
         // Get listing first to verify it still exists and is active
         const listing = await Listing.findById(listingId);
-        if (!listing || listing.status !== 'active') {
+        if (!listing ) {
           return;
         }
 
@@ -45,6 +45,14 @@ class CartTimeoutService {
           { user: userId },
           { $pull: { items: { product: listingId } } }
         );
+
+        if(listing.status !== 'expired'){
+          await Listing.updateOne(
+            { _id: listingId }, 
+            { $set: { status: 'expired' } } 
+          );
+        }
+        
 
         // Process cascade to next bidder
         await this.cascadeToNextBidder(listingId);
@@ -157,6 +165,7 @@ class CartTimeoutService {
 
   async scheduleCartTimeout(listingId, userId) {
     try {
+      console.log(`Scheduling timeout for listing ${listingId}, user ${userId}`);
       const jobId = `cart-timeout:${listingId}:${userId}`;
       
       // Remove any existing timeout jobs for this listing/user combination
@@ -183,6 +192,7 @@ class CartTimeoutService {
           removeOnFail: true
         }
       );
+      console.log(`Scheduled new timeout job ${jobId} with delay ${this.CART_TIMEOUT}ms`);
     } catch (error) {
       console.error('Error scheduling cart timeout:', error);
       throw error;

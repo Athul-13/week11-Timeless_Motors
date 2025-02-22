@@ -48,7 +48,7 @@ const listingSchema = new mongoose.Schema(
         required: true 
     },
     current_bid: { 
-        type: Number, 
+        type: Number,  
         default: 0 
     },
     minimum_increment: { 

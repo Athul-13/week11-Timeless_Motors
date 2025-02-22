@@ -168,20 +168,12 @@ exports.handleOrderSettlement = async (params) => {
 
 exports.handleOrderRefund = async (params) => {
   try {
-    const {
-      orderId,
-      orderAmount,
-      sellerId,
-      buyerId,
-      adminId,
-      refundFeePercentage = 5, // Default 5% refund processing fee
-      productId
-    } = params;
+    const { orderId, orderAmount, sellerId, buyerId, adminId, refundFeePercentage = 5, productId } = params;
 
     // Calculate amounts
-    const sellerAmount = (orderAmount * 10) / 100;
-    const refundFeeAmount = (sellerAmount * refundFeePercentage) / 100;
-    const buyerRefundAmount = sellerAmount - refundFeeAmount;
+    const deductionAmount = orderAmount - (orderAmount * 10 / 100);  // Step 1
+    const adminFee = (deductionAmount * refundFeePercentage) / 100;  // Step 2
+    const buyerRefundAmount = deductionAmount - adminFee;            // Step 3
 
     // Find all relevant wallets
     const [sellerWallet, buyerWallet, adminWallet] = await Promise.all([
@@ -195,69 +187,58 @@ exports.handleOrderRefund = async (params) => {
     }
 
     // Check if seller has sufficient balance
-    if (sellerWallet.balance < sellerAmount) {
+    if (sellerWallet.balance < deductionAmount) {
       throw new Error('Insufficient seller wallet balance for refund');
     }
 
-    // 1. Deduct full amount from seller wallet
-    await createLedgerEntry({
+    // 1. Deduct the refund amount from the seller's wallet
+    await this.createLedgerEntry({
       userId: sellerId,
       walletId: sellerWallet._id,
-      amount: sellerAmount,
+      amount: deductionAmount,
       type: 'Withdrawal',
       method: 'Wallet',
-      metadata: {
-        orderId,
-        productId
-      },
+      metadata: { orderId, productId },
       description: `Refund deduction for order #${orderId}`
     });
-    sellerWallet.balance -= orderAmount;
-    await sellerWallet.save({ session });
+    sellerWallet.balance -= deductionAmount;
+    await sellerWallet.save();
 
-    // 2. Add admin fee
-    await createLedgerEntry({
+    // 2. Add admin fee to the admin wallet
+    await this.createLedgerEntry({
       userId: adminId,
       walletId: adminWallet._id,
-      amount: refundFeeAmount,
+      amount: adminFee,
       type: 'Fee',
       method: 'Wallet',
-      metadata: {
-        orderId,
-        productId
-      },
+      metadata: { orderId, productId },
       description: `Refund processing fee for order #${orderId} (${refundFeePercentage}%)`
     });
-    adminWallet.balance += refundFeeAmount;
-    await adminWallet.save({ session });
+    adminWallet.balance += adminFee;
+    await adminWallet.save();
 
     // 3. Add refund amount to buyer wallet
-    await createLedgerEntry({
+    await this.createLedgerEntry({
       userId: buyerId,
       walletId: buyerWallet._id,
       amount: buyerRefundAmount,
       type: 'Refund',
       method: 'Wallet',
-      metadata: {
-        orderId,
-        productId
-      },
+      metadata: { orderId, productId },
       description: `Refund received for order #${orderId}`
     });
     buyerWallet.balance += buyerRefundAmount;
-    await buyerWallet.save({ session });
-
-    await session.commitTransaction();
+    await buyerWallet.save();
 
     return {
       success: true,
       refundDetails: {
         seller: {
-          deductedAmount: orderAmount,
+          deductedAmount: deductionAmount,
           wallet: sellerWallet._id
         },
         admin: {
-          feeAmount: refundFeeAmount,
+          feeAmount: adminFee,
           wallet: adminWallet._id
         },
         buyer: {
@@ -276,6 +257,9 @@ exports.handleOrderRefund = async (params) => {
 exports.getTransactions = async (req, res) => {
   try {
     const userId = req.user.id; 
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const skip = (page - 1) * limit;
     
     const wallet = await Wallet.findOne({ user: userId });
 
@@ -283,11 +267,22 @@ exports.getTransactions = async (req, res) => {
       return res.status(404).json({ message: "Wallet not found" });
     }
 
-    const transactions = await Ledger.find({wallet: wallet._id}).sort({createdAt: -1})
+    const transactions = await Ledger.find({wallet: wallet._id})
+      .sort({createdAt: 1})
+      .skip(skip)
+      .limit(limit);
+
+      const totalCount = await Ledger.countDocuments({wallet: wallet._id});
+      const totalPages = Math.ceil(totalCount / limit);
 
     return res.status(200).json({
       success: true,
-      transactions
+      data: {
+        transactions,
+        totalCount,
+        totalPages,
+        currentPage: page
+      }
     });
   } catch(error) {
     console.error("Error fetching transactions:", error);
@@ -303,7 +298,7 @@ exports.getAllTransactions = async (req, res) => {
       return res.status(404).json({ message: "Wallet not found" });
     }
 
-    const transactions = await Ledger.find().sort({createdAt: -1})
+    const transactions = await Ledger.find().sort({createdAt: 1})
     .populate({
       path: "wallet",
       populate: {

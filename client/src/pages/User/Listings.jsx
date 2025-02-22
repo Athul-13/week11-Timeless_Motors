@@ -149,8 +149,6 @@ const Listings = () => {
   const navigate = useNavigate()
   const dispatch = useDispatch()
 
-  console.log('years',categories);
-
   useEffect(() => {
     try {
       const params = Object.fromEntries(searchParams.entries());

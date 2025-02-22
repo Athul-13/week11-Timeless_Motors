@@ -12,7 +12,7 @@ const {validateSignup} = require("../middleware/validateMiddleware.js");
 const { getCart, addItemToCart, removeCartItem, clearCart } = require('../controller/cartController.js');
 const { getAddresses, editAddress, removeAddress, addAddress } = require('../controller/addressController.js');
 const { placeBid, getBidsByListing, getBidsByUser } = require('../controller/bidController.js');
-const { createOrder, getOrder, getOrderByUser, getAllOrders, updateOrderStatus, updatePaymentStatus, getSellerOrders } = require('../controller/orderController.js');
+const { createOrder, getOrder, getOrderByUser, getAllOrders, updateOrderStatus, updatePaymentStatus, getSellerOrders, cancelOrder, returnOrder, checkProductStatus, updateOrder } = require('../controller/orderController.js');
 const { getAllKYCDocuments, searchKYCDocument } = require('../controller/KYCcontroller.js');
 const { getAllActivity } = require('../controller/activityController.js');
 const { fetchNotification, markNotificationAsRead, markAllNotificationsAsRead } = require('../controller/notificationController.js');
@@ -105,12 +105,17 @@ router.delete('/cart/clear', protect, clearCart);
 
 
 // Order
+router.get('/listing/:listingId/status-check', protect, checkProductStatus)
 router.post('/order/create', protect, createOrder);
 router.get('/order/:orderId', protect, getOrder);
 router.get('/order', protect, getOrderByUser);
 router.get('/orders', protect, getAllOrders);
 router.get('/seller-orders', protect,getSellerOrders );
+router.put('/orders/:orderId/update', protect, updateOrder)
 router.put('/orders/:orderId/status', protect, updateOrderStatus);
 router.put('/orders/:orderId/payment-status', protect, updatePaymentStatus)
+router.put('/orders/:orderId/order-cancellation', protect, cancelOrder);
+router.put('/orders/:orderId/order-return', protect, returnOrder);
+
 
 module.exports = router;

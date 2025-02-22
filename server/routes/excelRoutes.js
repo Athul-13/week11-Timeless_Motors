@@ -9,9 +9,10 @@ router.get("/generate-sales-report-excel", async (req, res) => {
   try {
     const { dateFilter, startDate, endDate, searchQuery } = req.query;
 
-    let query = { orderStatus: "Confirmed" };
+    let query = {
+      "payment.status": "Completed",
+    };
 
-    // Apply Date Filtering
     const now = new Date();
     if (dateFilter === "today") {
       query["timestamps.orderedAt"] = {
@@ -33,7 +34,6 @@ router.get("/generate-sales-report-excel", async (req, res) => {
       };
     }
 
-    // Apply Search Filtering
     if (searchQuery) {
       query.$or = [
         { orderNumber: new RegExp(searchQuery, "i") },
@@ -42,84 +42,59 @@ router.get("/generate-sales-report-excel", async (req, res) => {
       ];
     }
 
-    // Fetch Confirmed Sales Data
     const salesData = await Order.find(query)
       .populate("product", "name description price")
       .populate("user", "name email")
       .sort({ "timestamps.orderedAt": -1 });
 
-    // Create reports directory if it doesn't exist
     const reportDir = path.join(__dirname, "../public/reports");
     if (!fs.existsSync(reportDir)) {
       fs.mkdirSync(reportDir, { recursive: true });
     }
 
-    // Create Excel Workbook & Sheet
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Sales Report");
 
-    // Title & Metadata
     worksheet.mergeCells("A1:F1");
-    worksheet.getCell("A1").value = "Confirmed Orders Report";
+    worksheet.getCell("A1").value = "TIMELESS MOTORS - Sales Report";
     worksheet.getCell("A1").font = { size: 16, bold: true };
     worksheet.getCell("A1").alignment = { horizontal: "center" };
 
     worksheet.addRow([]);
-    worksheet.addRow(["Generated:", new Date().toLocaleString()]);
-    worksheet.addRow(["Filter:", dateFilter]);
-
+    worksheet.addRow(["Report Generated:", new Date().toLocaleString()]);
+    worksheet.addRow(["Period:", dateFilter.charAt(0).toUpperCase() + dateFilter.slice(1)]);
     if (dateFilter === "custom") {
-      worksheet.addRow(["Period:", `${startDate} to ${endDate}`]);
+      worksheet.addRow(["Date Range:", `${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`]);
     }
-    if (searchQuery) {
-      worksheet.addRow(["Search Query:", searchQuery]);
-    }
+    if (searchQuery) worksheet.addRow(["Search Filter:", searchQuery]);
     worksheet.addRow([]);
 
-    // Summary Statistics
     const totalSales = salesData.reduce((sum, order) => sum + order.totalAmount, 0);
     const totalTax = salesData.reduce((sum, order) => sum + order.tax.amount, 0);
+    const tenPercentSales = totalSales * 0.1;
     const ordersByPaymentMethod = {};
-    const paymentStatusCount = {};
 
-    salesData.forEach((order) => {
-      ordersByPaymentMethod[order.payment.method] =
-        (ordersByPaymentMethod[order.payment.method] || 0) + 1;
-      paymentStatusCount[order.payment.status] =
-        (paymentStatusCount[order.payment.status] || 0) + 1;
+    salesData.forEach(order => {
+      ordersByPaymentMethod[order.payment.method] = (ordersByPaymentMethod[order.payment.method] || 0) + 1;
     });
 
-    worksheet.addRow(["Summary"]);
-    worksheet.addRow(["Total Confirmed Orders", salesData.length]);
-    worksheet.addRow(["Total Sales Amount", `₹${totalSales.toLocaleString()}`]);
+    worksheet.addRow(["Summary"]).font = { bold: true };
+    worksheet.addRow(["Total Orders", salesData.length]);
+    worksheet.addRow(["Total Revenue", `₹${totalSales.toLocaleString()}`]);
+    worksheet.addRow(["Total Commission Earned", `₹${tenPercentSales.toLocaleString()}`]);
     worksheet.addRow(["Total Tax Collected", `₹${totalTax.toLocaleString()}`]);
     worksheet.addRow([]);
 
-    // Payment Method Distribution
-    worksheet.addRow(["Payment Method Distribution"]);
+    worksheet.addRow(["Payment Method Distribution"]).font = { bold: true };
     Object.entries(ordersByPaymentMethod).forEach(([method, count]) => {
-      worksheet.addRow([method, `${count} orders`]);
+      worksheet.addRow([method, `${count} orders (${((count / salesData.length) * 100).toFixed(1)}%)`]);
     });
     worksheet.addRow([]);
 
-    // Payment Status Distribution
-    worksheet.addRow(["Payment Status Distribution"]);
-    Object.entries(paymentStatusCount).forEach(([status, count]) => {
-      worksheet.addRow([status, `${count} orders`]);
-    });
-    worksheet.addRow([]);
-
-    // Detailed Orders Table
-    worksheet.addRow([
-      "Order #",
-      "Date",
-      "Customer",
-      "Amount",
-      "Payment Method",
-      "Payment Status",
-    ]).font = { bold: true };
-
-    salesData.forEach((order) => {
+    worksheet.addRow(["Order Details"]).font = { bold: true };
+    worksheet.addRow(["Order #", "Date", "Customer", "Amount", "Payment Method", "Status"]).font = { bold: true };
+    
+    salesData.forEach(order => {
       worksheet.addRow([
         order.orderNumber,
         new Date(order.timestamps.orderedAt).toLocaleDateString(),
@@ -130,21 +105,14 @@ router.get("/generate-sales-report-excel", async (req, res) => {
       ]);
     });
 
-    // Auto-fit column widths
-    worksheet.columns.forEach((column) => {
-      column.width = column.values.reduce(
-        (max, val) => Math.max(max, val?.toString().length || 10),
-        10
-      );
+    worksheet.columns.forEach(column => {
+      column.width = column.values.reduce((max, val) => Math.max(max, val?.toString().length || 10), 10);
     });
 
-    // Save Excel File
-    const fileName = `confirmed-sales-report-${Date.now()}.xlsx`;
+    const fileName = `timeless-motors-sales-report-${Date.now()}.xlsx`;
     const filePath = path.join(reportDir, fileName);
-
     await workbook.xlsx.writeFile(filePath);
 
-    // Return URL
     res.json({
       excelUrl: `/reports/${fileName}`,
       summary: {
@@ -152,7 +120,7 @@ router.get("/generate-sales-report-excel", async (req, res) => {
         totalSales,
         totalTax,
         ordersByPaymentMethod,
-        paymentStatusCount,
+        averageOrderValue: totalSales / salesData.length,
       },
     });
   } catch (error) {

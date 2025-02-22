@@ -98,6 +98,15 @@ class NotificationService {
             throw error;
         }
     }
+
+    static async sendPaymentTimeoutNotification(userId, product, orderNumber) {
+        return this.sendNotification(userId, 'payment_timeout', {
+            orderNumber: orderNumber,
+            listingId: product._id,
+            title: 'Order Canceled Due to Payment Timeout',
+            description: `Your order #${orderNumber} for ${product.make} ${product.model} has been canceled as order was not completed within 48 hours.`
+        });
+    }
 }
 
 module.exports = NotificationService;

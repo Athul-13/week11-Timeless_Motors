@@ -3,6 +3,7 @@ const { redisConfig } = require('../config/redis');
 const Listing = require('../models/Listing');
 const Cart = require('../models/Cart');
 const NotificationService = require('./notificationServices');
+const CartTimeoutService = require('./cartTimeoutService');
 
 class QueueService {
   constructor() {
@@ -168,6 +169,11 @@ class QueueService {
       );
 
       console.log(`Successfully added listing ${listing._id} to winner's cart`);
+
+      await CartTimeoutService.scheduleCartTimeout(
+        listing._id, 
+        listing.last_bid_user_id._id
+      );
     } catch (error) {
       console.error('Error adding to winner cart:', error);
       throw error;

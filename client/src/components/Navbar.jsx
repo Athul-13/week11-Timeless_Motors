@@ -78,9 +78,9 @@ const NotificationDropdown = forwardRef(({ notifications, onClose, onMarkAsRead 
         return (
           <div
             className="block p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
-            onClick={() => handleNotificationClick(notification, () =>
-              navigate(`/listings/${notification.data.listingId._id}`)
-            )}
+            // onClick={() => handleNotificationClick(notification, () =>
+            //   navigate(`/listings/${notification.data.listingId._id}`)
+            // )}
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
@@ -103,9 +103,9 @@ const NotificationDropdown = forwardRef(({ notifications, onClose, onMarkAsRead 
         return (
           <div
             className="block p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
-            onClick={() => handleNotificationClick(notification, () =>
-              navigate(`/listings/${notification.data.listingId._id}`)
-            )}
+            // onClick={() => handleNotificationClick(notification, () =>
+            //   navigate(`/listings/${notification.data.listingId._id}`)
+            // )}
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
@@ -128,9 +128,9 @@ const NotificationDropdown = forwardRef(({ notifications, onClose, onMarkAsRead 
         return (
           <div
             className="block p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
-            onClick={() => handleNotificationClick(notification, () =>
-              navigate(`/listings/${notification.data.listingId._id}`)
-            )}
+            // onClick={() => handleNotificationClick(notification, () =>
+            //   navigate(`/listings/${notification.data.listingId._id}`)
+            // )}
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">

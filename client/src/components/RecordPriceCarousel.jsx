@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { listingService } from "../utils/api";
+import { useNavigate } from 'react-router-dom';
 
 const RecordPriceCarousel = () => {
   const [recordListings, setRecordListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate()
   
   const [emblaRef, emblaApi] = useEmblaCarousel({
     align: 'start',
@@ -78,8 +80,8 @@ const RecordPriceCarousel = () => {
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex">
           {recordListings.map((listing) => (
-            <div key={listing._id} className="flex-[0_0_100%] md:flex-[0_0_33.33%] px-3">
-              <div className="bg-gray-100 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+            <div key={listing._id } onClick={()=> navigate(`/listing/${listing._id}`)} className="flex-[0_0_100%] md:flex-[0_0_33.33%] px-3 cursor-pointer">
+              <div className="bg-gray-100 rounded-lg overflow-hidden hover:shadow-md transition-transform duration-300 hover:scale-105">
                 <div className="relative h-48 bg-neutral-200">
                   <img
                     src={listing.images[0]?.url || '/placeholder-car.jpg'}

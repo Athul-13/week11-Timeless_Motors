@@ -26,7 +26,7 @@ const loadFromCookies = () => {
             const parsedUser = JSON.parse(user);
             initialState.user = {
                 ...parsedUser,
-                profile_picture: parsedUser.profile_picture || null,
+                profilePicture: parsedUser.profilePicture || null,
             };
             initialState.isAuthenticated = true;
             initialState.isAdmin = parsedUser.role === 'admin';

@@ -93,6 +93,9 @@ exports.getBidsByListing = async (req, res) => {
   exports.getBidsByUser = async (req, res) => {
     try {
         const userId = req.user._id; 
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 5;
+        const skip = (page - 1) * limit;
 
         const userBids = await Bid.find({ user_id: userId })
             .populate({
@@ -100,7 +103,12 @@ exports.getBidsByListing = async (req, res) => {
                 select: 'make model year current_bid images status fuel_type transmission_type body_type cc_capacity',
                 match: { is_deleted: false } 
             })
-            .sort({ bid_date: -1 }); 
+            .sort({ bid_date: -1 })
+            .skip(skip)
+            .limit(limit);
+
+            const totalCount = await Bid.countDocuments({ user_id: userId });
+            const totalPages = Math.ceil(totalCount / limit);
 
         const validBids = userBids.filter(bid => bid.listing_id !== null);
 
@@ -124,7 +132,12 @@ exports.getBidsByListing = async (req, res) => {
         return res.status(200).json({
             success: true,
             count: formattedBids.length,
-            data: formattedBids
+            data: {
+                formattedBids,
+                totalCount,
+                totalPages,
+                currentPage: page
+            }
         });
 
     } catch (error) {

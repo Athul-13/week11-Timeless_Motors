@@ -10,11 +10,10 @@ router.get("/generate-sales-report", async (req, res) => {
     const { dateFilter, startDate, endDate, searchQuery } = req.query;
 
     let query = {
-      // Always filter for Confirmed orders
       'payment.status': 'Completed'
     };
 
-    // Apply Date Filtering
+    // Date filtering logic remains the same
     const now = new Date();
     if (dateFilter === "today") {
       query["timestamps.orderedAt"] = {
@@ -36,7 +35,6 @@ router.get("/generate-sales-report", async (req, res) => {
       };
     }
 
-    // Apply Search Filtering
     if (searchQuery) {
       query.$or = [
         { orderNumber: new RegExp(searchQuery, "i") },
@@ -45,126 +43,158 @@ router.get("/generate-sales-report", async (req, res) => {
       ];
     }
 
-    // Fetch Confirmed Sales Data with populated product details
     const salesData = await Order.find(query)
       .populate('product', 'name description price')
       .populate('user', 'name email')
       .sort({ "timestamps.orderedAt": -1 });
 
-    // Create PDF directory if it doesn't exist
     const reportDir = path.join(__dirname, "../public/reports");
     if (!fs.existsSync(reportDir)) {
       fs.mkdirSync(reportDir, { recursive: true });
     }
 
-    // Generate PDF
-    const fileName = `confirmed-sales-report-${Date.now()}.pdf`;
+    const fileName = `timeless-motors-sales-report-${Date.now()}.pdf`;
     const filePath = path.join(reportDir, fileName);
     const doc = new PDFDocument({ margin: 50 });
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
-    // Title and Header
-    doc.fontSize(20).text("Confirmed Orders Report", { align: "center" }).moveDown();
-    doc.fontSize(12).text(`Generated: ${new Date().toLocaleString()}`);
-    doc.text(`Filter: ${dateFilter}`);
+    // Helper functions for consistent styling
+    const drawHorizontalLine = (y) => {
+      doc.moveTo(50, y).lineTo(550, y).stroke();
+    };
+
+    const drawTableRow = (items, x, y, widths, options = {}) => {
+      items.forEach((item, i) => {
+        doc.text(item.toString(), x, y, {
+          width: widths[i],
+          align: options.align || 'left'
+        });
+        x += widths[i];
+      });
+    };
+
+    // Company Header
+    doc.font('Helvetica-Bold')
+      .fontSize(24)
+      .text('TIMELESS MOTORS', { align: 'center' })
+      .fontSize(14)
+      .text('Sales Report', { align: 'center' })
+      .moveDown();
+
+    // Report Details
+    doc.font('Helvetica')
+      .fontSize(10)
+      .text(`Report Generated: ${new Date().toLocaleString()}`)
+      .text(`Period: ${dateFilter.charAt(0).toUpperCase() + dateFilter.slice(1)}`)
+      .moveDown();
 
     if (dateFilter === "custom") {
-      doc.text(`Period: ${startDate} to ${endDate}`);
+      doc.text(`Date Range: ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`);
     }
-    if (searchQuery) doc.text(`Search Query: ${searchQuery}`);
+    if (searchQuery) doc.text(`Search Filter: ${searchQuery}`);
     doc.moveDown();
 
-    // Summary Statistics
+    // Summary Statistics with bordered box
     const totalSales = salesData.reduce((sum, order) => sum + order.totalAmount, 0);
     const totalTax = salesData.reduce((sum, order) => sum + order.tax.amount, 0);
-    const ordersByPaymentMethod = {};
-    const paymentStatusCount = {};
+    const tenPercentSales = totalSales * 0.1;
+    
+    doc.rect(50, doc.y, 500, 100).stroke(); // Draws the box
 
+    doc.fontSize(12).font('Helvetica-Bold').text('SUMMARY', 60, doc.y + 10);
+    doc.moveDown(); // Moves to next line
+
+    const summaryStartY = doc.y; // Store current Y position for alignment
+
+    doc.font('Helvetica').fontSize(10)
+      .text(`Total Orders: ${salesData.length}`, 60, summaryStartY + 10)
+      .text(`Total Revenue: ₹${totalSales.toLocaleString()}`, 280, summaryStartY + 10)
+      .text(`Total Commission Earned: ₹${tenPercentSales.toLocaleString()}`, 280, summaryStartY + 25)
+      .text(`Total Tax Collected: ₹${totalTax.toLocaleString()}`, 60, summaryStartY + 25)
+      .text(`Average Order Value: ₹${(totalSales / salesData.length).toFixed(2)}`, 280, summaryStartY + 40)
+      .moveDown(2);
+
+
+    // Payment Methods Distribution
+    doc.font('Helvetica-Bold')
+      .fontSize(12)
+      .text('Payment Method Distribution', { underline: true })
+      .moveDown();
+
+    const ordersByPaymentMethod = {};
     salesData.forEach(order => {
       ordersByPaymentMethod[order.payment.method] = (ordersByPaymentMethod[order.payment.method] || 0) + 1;
-      paymentStatusCount[order.payment.status] = (paymentStatusCount[order.payment.status] || 0) + 1;
     });
 
-    doc.fontSize(14).text("Summary", { underline: true }).moveDown();
-    doc.fontSize(12)
-      .text(`Total Confirmed Orders: ${salesData.length}`)
-      .text(`Total Sales Amount: ₹${totalSales.toLocaleString()}`)
-      .text(`Total Tax Collected: ₹${totalTax.toLocaleString()}`).moveDown();
-
-    // Payment Method Distribution
-    doc.fontSize(14).text("Payment Method Distribution", { underline: true }).moveDown();
-    doc.fontSize(12);
     Object.entries(ordersByPaymentMethod).forEach(([method, count]) => {
-      doc.text(`${method}: ${count} orders`);
-    });
-    doc.moveDown();
-
-    // Payment Status Distribution
-    doc.fontSize(14).text("Payment Status Distribution", { underline: true }).moveDown();
-    doc.fontSize(12);
-    Object.entries(paymentStatusCount).forEach(([status, count]) => {
-      doc.text(`${status}: ${count} orders`);
+      doc.font('Helvetica')
+        .fontSize(10)
+        .text(`${method}: ${count} orders (${((count / salesData.length) * 100).toFixed(1)}%)`);
     });
     doc.moveDown();
 
     // Detailed Orders Table
-    doc.fontSize(14).text("Order Details", { underline: true }).moveDown();
+    doc.font('Helvetica-Bold')
+      .fontSize(12)
+      .text('Order Details', { underline: true })
+      .moveDown();
 
     // Table headers
-    const startX = 50;
-    let currentY = doc.y;
+    const tableWidths = [80, 80, 120, 80, 80, 80];
+    const headers = ['Order #', 'Date', 'Customer', 'Amount', 'Payment', 'Status'];
     
-    doc.fontSize(10);
-    const headers = [
-      { text: "Order #", width: 80 },
-      { text: "Date", width: 80 },
-      { text: "Customer", width: 100 },
-      { text: "Amount", width: 70 },
-      { text: "Payment Method", width: 70 },
-      { text: "Payment Status", width: 70 }
-    ];
-
-    headers.forEach((header, i) => {
-      let xPos = startX;
-      headers.slice(0, i).forEach(h => xPos += h.width);
-      doc.text(header.text, xPos, currentY);
-    });
+    doc.font('Helvetica-Bold')
+      .fontSize(10);
+    
+    drawTableRow(headers, 50, doc.y, tableWidths);
     doc.moveDown();
-
+    drawHorizontalLine(doc.y - 5);
+    
     // Table rows
-    salesData.forEach((order) => {
+    doc.font('Helvetica')
+      .fontSize(9);
+
+    salesData.forEach((order, index) => {
       if (doc.y > 700) {
         doc.addPage();
-        doc.y = 50;
+        doc.font('Helvetica-Bold')
+          .fontSize(10);
+        drawTableRow(headers, 50, 50, tableWidths);
+        drawHorizontalLine(65);
+        doc.font('Helvetica')
+          .fontSize(9);
       }
 
-      currentY = doc.y;
-      let xPos = startX;
+      const row = [
+        order.orderNumber,
+        new Date(order.timestamps.orderedAt).toLocaleDateString(),
+        order.shippingAddress.name,
+        `₹${order.totalAmount.toLocaleString()}`,
+        order.payment.method,
+        order.payment.status
+      ];
 
-      doc.text(order.orderNumber, xPos, currentY);
-      xPos += headers[0].width;
-
-      doc.text(new Date(order.timestamps.orderedAt).toLocaleDateString(), xPos, currentY);
-      xPos += headers[1].width;
-
-      doc.text(order.shippingAddress.name, xPos, currentY);
-      xPos += headers[2].width;
-
-      doc.text(`₹${order.totalAmount.toLocaleString()}`, xPos, currentY);
-      xPos += headers[3].width;
-
-      doc.text(order.payment.method, xPos, currentY);
-      xPos += headers[4].width;
-
-      doc.text(order.payment.status, xPos, currentY);
-
+      drawTableRow(row, 50, doc.y, tableWidths);
       doc.moveDown();
+
+      // Add lighter line between rows
+      if (index < salesData.length - 1) {
+        doc.opacity(0.5);
+        drawHorizontalLine(doc.y - 5);
+        doc.opacity(1);
+      }
     });
+
+    // Footer
+    doc.fontSize(8)
+      .text('Timeless Motors - Confidential Business Document', 50, doc.page.height - 50, {
+        align: 'center',
+        width: 500
+      });
 
     doc.end();
 
-    // Return PDF URL and summary
     stream.on("finish", () => {
       res.json({
         pdfUrl: `/reports/${fileName}`,
@@ -173,7 +203,7 @@ router.get("/generate-sales-report", async (req, res) => {
           totalSales,
           totalTax,
           ordersByPaymentMethod,
-          paymentStatusCount
+          averageOrderValue: totalSales / salesData.length
         },
       });
     });

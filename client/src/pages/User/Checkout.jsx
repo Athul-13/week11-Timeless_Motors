@@ -299,6 +299,12 @@ const Checkout = () => {
       toast.error('Please select both shipping address and payment method');
       return;
     }
+
+    const productCheck = await orderService.checkProductAvailability(selectedItemId);
+    if (!productCheck || productCheck.status === 'sold') {
+      toast.error('Sorry, this item is no longer available.');
+      return;
+    }
     
     try {
       const item = items.find(cartItem => 
@@ -382,28 +388,46 @@ const Checkout = () => {
         name: 'Timeless Motors',
         description: `Payment for ${product.make} ${product.model}`,
         handler: async (response) => {
+          let paymentVerified = false;
+          let paymentError = null;
+          
+          // Step 1: Try to verify the payment
           try {
-            // Verify payment
-            await orderService.verifyPayment(response);
-            
-            // Create order after successful payment
+            const verificationResult = await orderService.verifyPayment(response);
+            paymentVerified = verificationResult.success;
+          } catch (error) {
+            console.error('Payment verification error:', error);
+            paymentError = error;
+          }
+          
+          // Step 2: Create the order regardless of verification outcome
+          try {
             const orderResponse = await orderService.createOrder({
               ...orderData,
               payment: {
                 ...orderData.payment,
                 razorpay_order_id: razorpayOrder.id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                status: 'Completed'
+                razorpay_payment_id: response.razorpay_payment_id || null,
+                status: paymentVerified ? 'Completed' : 'Pending'
               }
             });
-
+            
             if (orderResponse.success) {
-              toast.success('Order placed successfully');
-              dispatch(removeFromCart(selectedItemId));
+              if (paymentVerified) {
+                toast.success('Order placed successfully with payment confirmed');
+                // Only remove from cart if it's not an auction item
+                if (product.type !== 'Auction') {
+                  dispatch(removeFromCart(selectedItemId));
+                }
+              } else {
+                toast.warning('Order created with pending payment status. You can retry payment later.');
+              }
+              
               navigate(`/orders/${orderResponse.order._id}`);
             }
-          } catch (error) {
-            toast.error('Payment verification failed');
+          } catch (orderError) {
+            toast.error('Failed to create order');
+            console.error('Order Creation Error:', orderError);
           }
         },
         prefill: {
@@ -414,8 +438,28 @@ const Checkout = () => {
           color: '#4F46E5'
         },
         modal: {
-          ondismiss: function () {
-            toast.error('Payment was not completed');
+          ondismiss: async function () {
+            try {
+              const orderResponse = await orderService.createOrder({
+                ...orderData,
+                payment: {
+                  ...orderData.payment,
+                  razorpay_order_id: razorpayOrder.id,
+                  razorpay_payment_id: null,
+                  status: 'Pending'
+                }
+              });
+      
+              if (orderResponse.success) {
+                if (product.type !== 'Auction') {
+                  dispatch(removeFromCart(selectedItemId));
+                }
+                navigate(`/orders/${orderResponse.order._id}`);
+              }
+            } catch (orderError) {
+              toast.error('Failed to create order');
+              console.error('Order Creation Error:', orderError);
+            }
           }
         }
       };

@@ -7,7 +7,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel
 } from "@tanstack/react-table"
-import { Package, Download, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUpDown, CircleDollarSign, ShoppingCart } from "lucide-react"
+import { Package, Download, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUpDown, CircleDollarSign, ShoppingCart, Loader2 } from "lucide-react"
 import { toast, Toaster } from "react-hot-toast"
 
 import { adminServices, orderService } from "../../utils/api"
@@ -305,6 +305,48 @@ const DownloadButton = ({
       </div>
     );
   };
+  
+  const DownloadInvoiceButton = ({ orderId, orderNumber, className }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
+  
+    const handleDownload = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+  
+        // Send request to generate invoice
+        const response = await adminServices.generateInvoice(orderId)
+  
+        const { invoiceUrl, orderNumber } = response
+  
+          toast.success(`Invoice generated for order ${orderNumber}`);
+          window.open(`http://localhost:5000${invoiceUrl}`, '_blank');
+
+      } catch (error) {
+        console.error('Error generating invoice:', error);
+        setError('Failed to generate invoice. Please try again.');
+        toast.error('Failed to generate invoice');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+  
+    return (
+      <button
+        onClick={handleDownload}
+        disabled={isLoading}
+        className={`text-green-600 hover:text-green-800 transition-colors disabled:opacity-50 ${className}`}
+      >
+        {isLoading ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : (
+          <Download className="w-5 h-5" />
+        )}
+      </button>
+    );
+  };
+
 
 const SalesReport = () => {
   const [searchQuery, setSearchQuery] = useState("")
@@ -537,12 +579,12 @@ const SalesReport = () => {
               <ChevronDown className="h-5 w-5" />
             )}
           </button>
-          <button
-            onClick={() => handleDownloadInvoice(row.original)}
-            className="text-green-600 hover:text-green-800 transition-colors"
-          >
-            <Download className="h-5 w-5" />
-          </button>
+          <DownloadInvoiceButton 
+            orderId={row.original._id} 
+            orderNumber={row.original.orderNumber} 
+            className="p-1"
+            variant="secondary"
+          />
         </div>
       ),
     },
