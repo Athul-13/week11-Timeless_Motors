@@ -32,7 +32,7 @@ import ForgotPassword from "./pages/Auth/FogotPassword";
 import ChangePassword from "./pages/Auth/ChangePassword";
 import Wishlist from "./pages/User/Wishlist";
 import Cart from "./pages/User/Cart";
-import AddListing from "./pages/User/Addlisting";
+import AddListing from "./pages/User/AddListing";
 import Checkout from "./pages/User/Checkout";
 import OrderConfirmation from "./pages/User/OrderConfirmation";
 import KYCVerification from "./pages/Admin/KYCVerification";
