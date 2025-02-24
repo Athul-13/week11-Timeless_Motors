@@ -29,7 +29,7 @@ NotificationService.initialize(io);
 connectDB();
 
 app.use(cors({
-    origin: 'https://week11-timeless-motors.vercel.app/',
+    origin: 'https://week11-timeless-motors.vercel.app',
     credentials: true,
 }));
 
