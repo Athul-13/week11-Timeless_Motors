@@ -1,7 +1,7 @@
 import aboutBanner from '../assets/about-banner.jpg'
 import b1 from '../assets/b1.webp';
-import b2 from '../assets/b2.webp';
-import b3 from '../assets/b3.webp';
+import b2 from '../assets/B2.webp';
+import b3 from '../assets/B3.webp';
 import Footer from '../components/Footer';
 import Navbar from '../components/Navbar';
 
