@@ -43,7 +43,9 @@ redisClient.on('error', (err) => {
     host: process.env.REDIS_CLOUD_HOST,
     port: process.env.REDIS_CLOUD_PORT,
     // Don't log the actual password
-    hasPassword: !!process.env.REDIS_CLOUD_PASSWORD
+    hasPassword: !!process.env.REDIS_CLOUD_PASSWORD,
+    maxRetriesPerRequest: null,  
+    enableReadyCheck: false
   });
 });
 
