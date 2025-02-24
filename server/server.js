@@ -29,7 +29,7 @@ NotificationService.initialize(io);
 connectDB();
 
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: 'https://timelessmotors.vercel.app',
     credentials: true,
 }));
 
