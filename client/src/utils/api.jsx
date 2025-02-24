@@ -676,6 +676,10 @@ export const walletService = {
     walletStatus: async(walletId, status) => {
         const response = await api.patch(`/wallet/${walletId}/status`,{isActive: status});
         return response.data;
+    },
+    addMoney: async({ amount, paymentId, orderId }) => {
+        const response = await api.post('/wallet/addmoney', {amount, paymentId, orderId});
+        return response.data;
     }
 }
 

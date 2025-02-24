@@ -344,3 +344,76 @@ exports.walletStatus = async (req, res) => {
     res.status(500).json({ message: 'Failed to update wallet status' });
   }
 }
+
+exports.addMoney = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log("Received payload:", req.body);
+    
+    // Extract and validate amount
+    const amountValue = Number(req.body.amount); ;
+    if (isNaN(amountValue) || amountValue <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid amount'
+      });
+    }
+    console.log("Parsed amount:", amountValue);
+
+    const { paymentId, orderId } = req.body;
+
+    // Find or create wallet
+    let wallet = await Wallet.findOne({ user: userId });
+    if (!wallet) {
+      wallet = await Wallet.create({
+        user: userId,
+        balance: 0,
+        currency: 'INR',
+        isActive: true
+      });
+    }
+
+    // Create unique transaction ID
+    const txn_id = `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Create ledger entry with validated amount
+    const ledgerEntry = await Ledger.create({
+      user: userId,
+      wallet: wallet._id,
+      txn_id,
+      type: 'Deposit',
+      amount: amountValue, // Using the validated number
+      status: 'Success',
+      method: 'Razorpay',
+      description: `Wallet recharge via Razorpay (Payment ID: ${paymentId})`
+    });
+
+    // Update wallet balance with validated amount
+    const updatedWallet = await Wallet.findOneAndUpdate(
+      { _id: wallet._id },
+      { 
+        $inc: { balance: amountValue },
+        $set: { lastUpdated: new Date() }
+      },
+      { new: true } // Return updated document
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Money added successfully',
+      data: {
+        wallet: updatedWallet,
+        ledger: ledgerEntry,
+        balance: updatedWallet.balance
+      }
+    });
+
+  } catch (error) {
+    console.error('Wallet update error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to add money to wallet',
+      error: error.message
+    });
+  }
+};

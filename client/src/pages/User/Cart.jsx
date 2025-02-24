@@ -161,12 +161,18 @@ const Cart = () => {
   const { items, loading } = useSelector((state) => state.cart);
   const { isAuthenticated } = useSelector((state) => state.auth);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
     if (isAuthenticated) {
+      setIsInitialLoad(true);
       dispatch(fetchCart())
         .unwrap()
+        .then(() => {
+          setIsInitialLoad(false);
+        })
         .catch((error) => {
+          setIsInitialLoad(false); 
           toast.error('Failed to load cart');
           console.error('Cart Fetch Error:', error);
         });
@@ -175,15 +181,16 @@ const Cart = () => {
 
   useEffect(() => {
     // Set the first item as selected by default when cart loads
-    if (items?.length > 0 && items[0]?.items?.length > 0) {
+    if (!isInitialLoad && items?.length > 0 && items[0]?.items?.length > 0) {
       setSelectedItem(items[0].items[0].product);
     }
-  }, [items]);
+  }, [items, isInitialLoad]);
 
-  if (!isAuthenticated) {
-    navigate('/login');
-    return null;
-  }
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleRemoveItem = (event, productId) => {
     event.stopPropagation();
@@ -194,7 +201,7 @@ const Cart = () => {
           dispatch(fetchCart());
           if (selectedItem?._id === productId) {
             // If selected item was removed, select the next available item
-            const remainingItems = items.flatMap(item => 
+            const remainingItems = items?.flatMap(item => 
               item.items.filter(subItem => subItem.product._id !== productId)
             );
             setSelectedItem(remainingItems[0]?.product || null);
@@ -214,8 +221,9 @@ const Cart = () => {
     }
   };
 
-  const allCartItems = items.flatMap(item => item.items);
+  const allCartItems = items?.flatMap(item => item.items);
   const hasItems = allCartItems.length > 0;
+
 
   return (
     <>
@@ -224,7 +232,7 @@ const Cart = () => {
       <div className="max-w-7xl mx-auto px-4 py-8 min-h-screen">
         <h2 className="text-3xl font-bold text-gray-800 mb-8">Shopping Cart</h2>
 
-        {loading ? (
+        {(isInitialLoad || loading)  ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
           </div>

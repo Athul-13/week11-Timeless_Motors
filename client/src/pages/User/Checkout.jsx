@@ -1,52 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ShoppingBag, MapPin, ChevronDown, ChevronUp, CreditCard, Truck, Timer } from 'lucide-react';
+import { ShoppingBag, MapPin, ChevronDown, ChevronUp, CreditCard, Truck, Timer, Wallet } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
 import { fetchCart, removeFromCart } from '../../redux/cartSlice';
 import AddressManager from './AddressManager';
-import { orderService } from '../../utils/api';
+import { orderService, walletService } from '../../utils/api';
 import RazorpayCheckout from '../../components/RazorpayCheckout';
-
-// const CartItem = ({ listing, onCardClick, onRemove }) => {
-//   const price = listing.type === 'Auction' 
-//     ? listing.current_bid 
-//     : listing.starting_bid;
-
-//   return (
-//     <div 
-//       className="flex group relative bg-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer"
-//       onClick={onCardClick}
-//     >
-//       <div className="w-44 h-32 flex-shrink-0">
-//         <img
-//           src={listing.images[0]?.url || '/placeholder-car.jpg'}
-//           alt={`${listing.make} ${listing.model}`}
-//           className="w-full h-full object-fill p-2"
-//         />
-//         <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity duration-300" />
-//       </div>
-//       <div className="flex-grow p-4">
-//         <h3 className="font-medium text-lg text-gray-800">{`${listing.year} ${listing.make} ${listing.model}`}</h3>
-//         <p className="text-sm text-gray-500 mt-1">{listing.body_type}</p>
-//         <div className="mt-2 text-lg font-bold text-indigo-600">
-//           ₹ {price?.toLocaleString()}
-//         </div>
-//         <button
-//           onClick={onRemove}
-//           className="absolute top-3 right-3 bg-white/90 backdrop-blur text-red-500 p-2 rounded-full 
-//                      shadow-md hover:bg-red-500 hover:text-white transition-all duration-300 
-//                      transform hover:scale-110 group-hover:opacity-100 opacity-0"
-//           title="Remove from cart"
-//         >
-//           <Trash2 size={18} />
-//         </button>
-//       </div>
-//     </div>
-//   );
-// };
 
 const CartSummary = ({ subtotal, tax, total, onCheckout }) => (
   <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6">
@@ -170,11 +132,31 @@ const ListingSummary = ({ items, isOpen, onToggle, disabled, selectedItemId }) =
   );
 };
 
-const PaymentMethodSelector = ({ onSelect, onClose, disabled }) => (
+const PaymentMethodSelector = ({ onSelect, onClose, disabled, walletBalance }) => (
     <div className={`bg-white rounded-xl shadow p-4 mb-6 ${disabled ? 'opacity-50' : ''}`}>
         <h3 className="font-medium text-gray-800 mb-4">Select Payment Method</h3>
         <div className="space-y-3">
         <RazorpayCheckout onSelect={onSelect} disabled={disabled} />
+
+        <button
+            disabled={disabled || walletBalance < 1}  // Disable if balance is zero
+            onClick={() => onSelect({
+                type: 'wallet',
+                label: 'Wallet Payment',
+                icon: Wallet 
+            })}
+            className={`w-full flex items-center gap-3 p-3 border rounded-lg 
+            ${!disabled && walletBalance >= 1 ? 'hover:border-indigo-600' : 'opacity-50'} 
+            transition-colors`}
+        >
+            <Wallet className="w-5 h-5 text-gray-500" />
+            <div className="flex-1 text-left">
+                <div className="font-medium text-gray-800">Wallet</div>
+                <div className="text-sm text-gray-500">
+                    Balance: ₹{walletBalance.toFixed(2)}
+                </div>
+            </div>
+        </button>
 
         <button
             disabled={disabled}
@@ -233,6 +215,16 @@ const Checkout = () => {
   const [showListings, setShowListings] = useState(false);
   const [isListingsEnabled, setIsListingsEnabled] = useState(false);
   const [isPaymentEnabled, setIsPaymentEnabled] = useState(false); 
+  const [walletBalance, setWalletBalance] = useState(0);
+
+  useEffect(() => {
+      const fetchBalance = async () => {
+        const balance = await walletService.fetchWallet();
+        setWalletBalance(balance.balance);
+      };
+    
+      fetchBalance();
+    }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -516,6 +508,7 @@ const Checkout = () => {
                 onSelect={handlePaymentSelection}
                 onClose={() => setShowPaymentSelector(false)}
                 disabled={!isPaymentEnabled}
+                walletBalance={walletBalance}
                 />
             ) : (
                 <SelectedPaymentMethod

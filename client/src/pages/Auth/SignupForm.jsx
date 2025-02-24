@@ -46,7 +46,6 @@ const SignupForm = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    console.log('form', formData);
     if(validateForm(formData)) {
       try {
         const otpResponse = await authService.sendOTP(formData);
