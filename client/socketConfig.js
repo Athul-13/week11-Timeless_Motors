@@ -8,7 +8,7 @@ const initializeSocket = () => {
         throw new Error('No authentication token found');
     }
     
-    const socket = io( "http://localhost:5000", {
+    const socket = io( "https://timeless-motors.onrender.com", {
         withCredentials: true,
         auth: {
             token
