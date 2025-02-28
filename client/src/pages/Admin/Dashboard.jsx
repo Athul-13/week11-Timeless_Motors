@@ -101,7 +101,6 @@ const Dashboard = () => {
       setIsLoading(false);
     }
   };
-  console.log('sales',chartData.salesData);
 
   // Calculate key metrics
   const totalActiveUsers = metrics.users.filter(user => user.status === 'active' || user.status === 'verified').length;

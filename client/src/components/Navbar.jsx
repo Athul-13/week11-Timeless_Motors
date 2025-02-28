@@ -254,7 +254,6 @@ const Navbar = () => {
   const fetchNotifications = async () => {
     try {
       const data = await notificationService.fetchNotification();
-      console.log('Fetched notifications:', data);
       setNotifications(data);
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -265,7 +264,6 @@ const Navbar = () => {
     if (!socket) return;
 
     const handleNewNotification = (notification) => {
-      console.log('Received new notification:', notification);
       setNotifications(prev => [notification, ...prev]);
     };
 

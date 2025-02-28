@@ -84,7 +84,6 @@ const AuctionManagement = () => {
   const handleApprovalChange = async (listingId, newStatus) => {
     try {
       await listingService.updateApprovalStatus(listingId, newStatus);
-      console.log('handle:',listingId);
       setListings(listings.map(listing =>
         listing._id === listingId ? { ...listing, approval_status: newStatus } : listing
       ));
@@ -276,8 +275,6 @@ const AuctionManagement = () => {
   ], [navigate]);
 
   const filteredData = useMemo(() => {
-    console.log('Current listings:', listings);
-  console.log('Selected type:', selectedType);
     return listings.filter(listing => {
       // First apply type filter
       const passesTypeFilter = 
