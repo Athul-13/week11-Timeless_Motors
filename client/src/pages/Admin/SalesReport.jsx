@@ -380,38 +380,53 @@ const SalesReport = () => {
 
   // Date filtering logic
   const filteredOrders = useMemo(() => {
-    const today = new Date()
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0))
+    const today = new Date();
+    const startOfDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0));
 
     return orders.map(order => ({
       ...order,
-      // Add a sortableDate field for better performance
       sortableDate: new Date(order.timestamps.orderedAt).getTime()
     })).filter(order => {
-      const orderDate = new Date(order.timestamps.orderedAt)
-      
+      const orderDate = new Date(order.timestamps.orderedAt);
+      const orderDateUTC = new Date(Date.UTC(
+        orderDate.getUTCFullYear(), orderDate.getUTCMonth(), orderDate.getUTCDate(),
+        orderDate.getUTCHours(), orderDate.getUTCMinutes(), orderDate.getUTCSeconds()
+      ));
+
       switch (dateFilter) {
         case "daily":
-          return orderDate >= startOfDay
+          return orderDateUTC >= startOfDay;
         case "weekly":
-          const weekStart = new Date(today.setDate(today.getDate() - 7))
-          return orderDate >= weekStart
+          const weekStart = new Date();
+          weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+          return orderDateUTC >= weekStart;
         case "monthly":
-          const monthStart = new Date(today.setMonth(today.getMonth() - 1))
-          return orderDate >= monthStart
+          const monthStart = new Date();
+          monthStart.setUTCMonth(monthStart.getUTCMonth() - 1);
+          return orderDateUTC >= monthStart;
         case "yearly":
-          const yearStart = new Date(today.setFullYear(today.getFullYear() - 1))
-          return orderDate >= yearStart
+          const yearStart = new Date();
+          yearStart.setUTCFullYear(yearStart.getUTCFullYear() - 1);
+          return orderDateUTC >= yearStart;
         case "custom":
-          if (!customDateRange.start || !customDateRange.end) return true
-          const start = new Date(customDateRange.start)
-          const end = new Date(customDateRange.end)
-          return orderDate >= start && orderDate <= end
+          if (!customDateRange.start || !customDateRange.end) return true;
+          const start = new Date(customDateRange.start);
+          const startUTC = new Date(Date.UTC(
+            start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate(),
+            0, 0, 0, 0
+          ));
+          const end = new Date(customDateRange.end);
+          const endUTC = new Date(Date.UTC(
+            end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate(),
+            23, 59, 59, 999 // Ensure the entire day is included
+          ));
+          return orderDateUTC >= startUTC && orderDateUTC <= endUTC;
         default:
-          return true
+          return true;
       }
-    })
-  }, [orders, dateFilter, customDateRange])
+    });
+  }, [orders, dateFilter, customDateRange]);
+
 
   const handleOrderStatusChange = async (orderId, newStatus) => {
     setStatusLoading(true)
