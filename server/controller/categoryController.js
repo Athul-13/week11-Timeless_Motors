@@ -2,13 +2,15 @@ const Category = require('../models/Category');
 
 exports.createCategory = async (req, res) => {
     try {
-        const {name, status} = req.body;
+        const { name, status } = req.body;
 
         if (!name) {
             return res.status(400).json({ message: "Category name is required" });
         }
 
-        const existingCategory = await Category.findOne({ name });
+        // Case-insensitive search
+        const existingCategory = await Category.findOne({ name: { $regex: `^${name}$`, $options: "i" } });
+
         if (existingCategory) {
             return res.status(409).json({ message: "Category with this name already exists" });
         }
@@ -25,9 +27,9 @@ exports.createCategory = async (req, res) => {
             message: "Category created successfully"
         });
     } catch (err) {
-        res.status(500).json({message: err.message})
+        res.status(500).json({ message: err.message });
     }
-}
+};
 
 exports.addSubcategory = async (req, res) => {
     try {
@@ -226,18 +228,40 @@ exports.deleteCategory = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const category = await Category.findById(id);
-        if (!category) {
-            return res.status(404).json({ message: "Category not found" });
+        // Check if ID belongs to a main category
+        const mainCategory = await Category.findById(id);
+        
+        if (mainCategory) {
+            // If it's a main category, delete it completely
+            await Category.deleteOne({ _id: id });
+            return res.status(200).json({
+                status: 200,
+                data: {},
+                message: "Main category deleted successfully"
+            });
         }
-
-        await Category.deleteOne({ _id: id });
-
+        
+        // If not a main category, check if it's a subcategory
+        const categoryWithSubcategory = await Category.findOne({
+            "subCategories._id": id
+        });
+        
+        if (!categoryWithSubcategory) {
+            return res.status(404).json({ message: "Category or subcategory not found" });
+        }
+        
+        // Update the category to remove the specific subcategory
+        await Category.updateOne(
+            { "subCategories._id": id },
+            { $pull: { subCategories: { _id: id } } }
+        );
+        
         return res.status(200).json({
             status: 200,
             data: {},
-            message: "Category deleted successfully"
+            message: "Subcategory deleted successfully"
         });
+        
     } catch (error) {
         return res.status(500).json({ message: error.message });
     }

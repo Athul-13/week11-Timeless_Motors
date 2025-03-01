@@ -215,8 +215,8 @@ exports.login = async (req, res) => {
         await user.save();
 
         res.cookie('refreshToken', refreshToken, {
-            httpOnly: false,
-            secure: true, 
+            httpOnly: true,
+            secure: false, 
             sameSite: 'Strict', 
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });

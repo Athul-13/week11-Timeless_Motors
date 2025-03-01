@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 
-const API_URL = 'https://timeless-motors.onrender.com/api'
+const API_URL ="https://timeless-motors.onrender.com/api";
 
 const api = axios.create({
     baseURL: API_URL,

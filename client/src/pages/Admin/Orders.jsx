@@ -274,7 +274,11 @@ const Orders = () => {
       ))
       toast.success("Order status updated successfully")
     } catch (error) {
-      toast.error("Failed to update order status")
+      const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to update order status";
+      toast.error(errorMessage);
     } finally {
       setStatusLoading(false)
     }

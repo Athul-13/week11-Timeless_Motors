@@ -3,7 +3,7 @@ const router = express.Router();
 const {register, login, verifyOTP, resendOTP, googleAuth, logout, verifyForgotPasswordOTP, changePassword, refreshToken} = require('../controller/authController');
 const { protect, updateUserStatus, authorize, optionalProtect } = require('../middleware/authMiddleware');
 const { addListing, getAllListings, getListingById, updateListing, updateApprovalStatus, updateListingStatus, getListingsByUser } = require('../controller/listingController');
-const { getAllCategories, createCategory, addSubcategory, updateCategoryStatus, updateSubcategoryStatus, updateSubcategory, updateCategory } = require('../controller/categoryController');
+const { getAllCategories, createCategory, addSubcategory, updateCategoryStatus, updateSubcategoryStatus, updateSubcategory, updateCategory, deleteSubcategory, deleteCategory } = require('../controller/categoryController');
 const { auth } = require('google-auth-library');
 const { getAllUsers } = require('../controller/userController');
 const { getProfile, updateProfile, updateProfilePicture, getKYC } = require('../controller/profileController');
@@ -87,6 +87,8 @@ router.put('/categories/:categoryId',protect, authorize('admin'), updateCategory
 router.put('/categories/:categoryId/name',protect, authorize('admin'), updateCategory);
 router.put('/categories/:categoryId/subcategories/:subcategoryId', protect, authorize('admin'), updateSubcategoryStatus);
 router.put('/categories/:categoryId/subcategories/:subcategoryId/name', protect, authorize('admin'), updateSubcategory);
+router.delete('/categories/:id', protect, authorize('admin'), deleteCategory)
+router.delete('/categories/:categoryId/subcategories/:subcategoryId', protect, authorize('admin'), deleteSubcategory)
 
 
 

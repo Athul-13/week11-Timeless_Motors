@@ -28,10 +28,12 @@ NotificationService.initialize(io);
 
 connectDB();
 
-app.use(cors({
-    origin: 'https://week11-timeless-motors.vercel.app',
+app.use(
+  cors({
+    origin: ["https://week11-timeless-motors.vercel.app", "http://localhost:5173"],
     credentials: true,
-}));
+  })
+);
 
 app.set('io', io);
 

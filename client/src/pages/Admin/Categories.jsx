@@ -109,7 +109,7 @@ const Categories = () => {
     columns,
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
-    getSubRows: (row) => row.subCategories,
+    getSubRows: (row) => row.subCategories || [],
   });
 
   const handleStatusChange = (category) => {
@@ -140,6 +140,7 @@ const Categories = () => {
 
     try {
       if (selectedCategory.parentId) {
+        console.log('sub');
         // Delete subcategory
         await dispatch(deleteSubcategory({
           categoryId: selectedCategory.parentId,

@@ -44,6 +44,7 @@ import Transactions from "./pages/User/Transactions";
 import AllTransactions from "./pages/Admin/AllTransactions";
 import MySales from "./pages/User/MySales";
 import FAQPage from "./pages/FAQPage";
+import NotFoundPage from "./pages/NotFoundPage";
 
 
 
@@ -174,6 +175,8 @@ export default function App () {
               <Route path="/admin/categories/edit/:categoryId" element={< AddCategory />} />
               <Route path="support" element={<Support />} />
           </Route>
+
+          <Route path="*" element={< NotFoundPage />} />
 
         </Routes>
       </BrowserRouter>

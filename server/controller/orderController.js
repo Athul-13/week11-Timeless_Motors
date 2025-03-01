@@ -517,21 +517,19 @@ exports.updatePaymentStatus = async (req, res) => {
       });
     }
 
-    // Update payment status
-    const updatedOrder = await Order.findByIdAndUpdate(
-      orderId,
-      { 'payment.status': status },
-      { new: true }
-    ).populate('user', 'first_name last_name email phone_no')
-     .populate('product', 'make model year fuel_type images seller_id');
+    // First find the existing order to check conditions
+    const existingOrder = await Order.findById(orderId)
+      .populate('user', 'first_name last_name email phone_no')
+      .populate('product', 'make model year fuel_type images seller_id');
 
-    if (!updatedOrder) {
+    if (!existingOrder) {
       return res.status(404).json({
         success: false,
         message: 'Order not found',
       });
     }
 
+    // Check if refund is allowed
     if (status === 'Refunded' && existingOrder.payment.status !== 'Completed') {
       return res.status(400).json({
         success: false,
@@ -562,12 +560,12 @@ exports.updatePaymentStatus = async (req, res) => {
           message: 'Failed to process refund',
         });
       }
-    } 
+    }
 
     return res.status(200).json({
       success: true,
       message: 'Payment status updated successfully',
-      order: updatedOrder,
+      order: existingOrder,
     });
   } catch (error) {
     console.error('Error updating payment status:', error);
