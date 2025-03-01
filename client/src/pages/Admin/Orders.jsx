@@ -174,7 +174,7 @@ const DownloadInvoiceButton = ({ orderId, orderNumber, className }) => {
       const { invoiceUrl, orderNumber } = response
 
         toast.success(`Invoice generated for order ${orderNumber}`);
-        window.open(`http://localhost:5000${invoiceUrl}`, '_blank');
+        window.open(`https://timeless-motors.onrender.com${invoiceUrl}`, '_blank');
 
     } catch (error) {
       console.error('Error generating invoice:', error);
