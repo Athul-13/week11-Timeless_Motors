@@ -133,7 +133,7 @@ app.use('/api/PDF', PDFRoutes)
 app.use('/api/excel', excelRoutes)
 app.use('/api/invoice', invoiceRoutes)
 app.use("/reports", express.static(path.join(__dirname, "public/reports")));
-app.use("/invoices", express.static(path.join(__dirname, "Public/invoices")))
+app.use("/invoices", express.static(path.join(__dirname, "public/invoices")))
 
 app.get('/api/queue-health', async (req, res) => {
   try {
