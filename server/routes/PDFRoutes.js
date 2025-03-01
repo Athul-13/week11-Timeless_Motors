@@ -14,26 +14,31 @@ router.get("/generate-sales-report", async (req, res) => {
     };
 
     // Date filtering logic remains the same
-    const now = new Date();
+    const toUTC = (date) => new Date(Date.UTC(
+      date.getFullYear(), date.getMonth(), date.getDate(),
+      date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds()
+    ));
+    
     if (dateFilter === "today") {
       query["timestamps.orderedAt"] = {
-        $gte: new Date(now.setHours(0, 0, 0, 0)),
-        $lt: new Date(now.setHours(23, 59, 59, 999)),
+        $gte: toUTC(new Date(new Date().setHours(0, 0, 0, 0))),
+        $lt: toUTC(new Date(new Date().setHours(23, 59, 59, 999))),
       };
     } else if (dateFilter === "week") {
       query["timestamps.orderedAt"] = {
-        $gte: new Date(now.setDate(now.getDate() - 7)),
+        $gte: toUTC(new Date(new Date().setDate(new Date().getDate() - 7))),
       };
     } else if (dateFilter === "month") {
       query["timestamps.orderedAt"] = {
-        $gte: new Date(now.setMonth(now.getMonth() - 1)),
+        $gte: toUTC(new Date(new Date().setMonth(new Date().getMonth() - 1))),
       };
     } else if (dateFilter === "custom" && startDate && endDate) {
       query["timestamps.orderedAt"] = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $gte: toUTC(new Date(startDate)),
+        $lte: toUTC(new Date(endDate)),
       };
     }
+    
 
     if (searchQuery) {
       query.$or = [
