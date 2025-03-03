@@ -100,6 +100,7 @@ const AdminAddListingForm = () => {
   const formData = useSelector((state) => state.listing.formData);
   const categories = useSelector((state) => state.categories.categories);
   const [isLoading, setIsLoading] = useState(true);
+  const [formModified, setFormModified] = useState(false);
 
   const CLOUD_NAME = 'dncoxucat';
   const UPLOAD_PRESET = 'listing_images';
@@ -116,7 +117,7 @@ const AdminAddListingForm = () => {
     reset
   } = useForm({
     resolver: joiResolver(listingSchema),
-    mode: "onChange",
+    mode: "all", // Changed from "onChange" to "all" to validate on mount
     defaultValues: formData
   });
 
@@ -125,12 +126,20 @@ const AdminAddListingForm = () => {
     if (formData) {
       Object.keys(formData).forEach(key => {
         if (key !== 'images') {
-          setValue(key, formData[key], { shouldValidate: true, shouldDirty: true });
+          setValue(key, formData[key], { shouldValidate: true, shouldDirty: false });
         }
       });
       setValue('images', formData.images || [], { shouldValidate: true });
     }
   }, [formData, setValue]);
+
+  // Effect to trigger validation of all fields in edit mode
+  useEffect(() => {
+    if (isEditMode && !isLoading) {
+      // Validate all fields after form is loaded in edit mode
+      trigger();
+    }
+  }, [isEditMode, isLoading, trigger]);
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -231,25 +240,44 @@ const AdminAddListingForm = () => {
 
   // Validation indicator component
   const ValidationIndicator = ({ field }) => {
-    const isDirty = dirtyFields[field];
+    const value = watch(field);
     const hasError = !!errors[field];
-    const isTouched = touchedFields[field];
     
-    if (!isDirty) return null;
+    // In edit mode, only show validation indicator if there's an actual value
+    if (isEditMode && value) {
+      return (
+        <div className="absolute right-12 top-1/2">
+          {hasError ? (
+            <XCircle size={16} className="text-red-500" />
+          ) : (
+            <CheckCircle size={16} className="text-green-500" />
+          )}
+        </div>
+      );
+    }
     
-    return (
-      <div className="absolute right-12 top-1/2">
-        {hasError ? (
-          <XCircle size={16} className="text-red-500" />
-        ) : (
-          <CheckCircle size={16} className="text-green-500" />
-        )}
-      </div>
-    );
+    // In create mode, use the original logic
+    if (!isEditMode) {
+      const isDirty = dirtyFields[field];
+      if (!isDirty) return null;
+      
+      return (
+        <div className="absolute right-12 top-1/2">
+          {hasError ? (
+            <XCircle size={16} className="text-red-500" />
+          ) : (
+            <CheckCircle size={16} className="text-green-500" />
+          )}
+        </div>
+      );
+    }
+    
+    return null;
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setFormModified(true);
     if (e.target.tagName === 'SELECT') {
       const selectedOption = e.target.options[e.target.selectedIndex];
       const actualValue = selectedOption.getAttribute('data-name') || value;
@@ -295,6 +323,7 @@ const AdminAddListingForm = () => {
     const toastId = toast.loading(<div className="flex items-center gap-2"><Upload className="animate-bounce" size={18} /><span>Uploading images...</span></div>);
     let successCount = 0;
     let failCount = 0;
+    setFormModified(true);
 
     for (const file of files) {
       if (!file.type.startsWith('image/')) {
@@ -328,6 +357,7 @@ const AdminAddListingForm = () => {
   const deleteImage = (index) => {
     dispatch(removeImage(index));
     trigger('images');
+    setFormModified(true);
     toast(
       <div className="flex items-center gap-2">
         <CheckCircle2 size={18} />
@@ -351,46 +381,52 @@ const AdminAddListingForm = () => {
       return;
     }
 
-    const toastId = toast.loading(
-      <div className="flex items-center gap-2">
-        <Upload className="animate-bounce" size={18} />
-        <span>{isEditMode ? 'Updating' : 'Creating'} listing...</span>
-      </div>
-    );
+    // In edit mode, only proceed if form was modified or we're in create mode
+    if (!isEditMode || (isEditMode && formModified)) {
+      const toastId = toast.loading(
+        <div className="flex items-center gap-2">
+          <Upload className="animate-bounce" size={18} />
+          <span>{isEditMode ? 'Updating' : 'Creating'} listing...</span>
+        </div>
+      );
 
-    try {
-      const transformedData = {
-        ...data,
-        images: formData.images.map(img => ({
-          url: img.url,
-          public_id: img.public_id
-        }))
-      };
+      try {
+        const transformedData = {
+          ...data,
+          images: formData.images.map(img => ({
+            url: img.url,
+            public_id: img.public_id
+          }))
+        };
 
-      let response;
-      if (isEditMode) {
-        response = await listingService.updateListing(listingId, transformedData);
-      } else {
-        response = await listingService.addListing(transformedData);
+        let response;
+        if (isEditMode) {
+          response = await listingService.updateListing(listingId, transformedData);
+        } else {
+          response = await listingService.addListing(transformedData);
+        }
+
+        toast.dismiss(toastId);
+        toast.success(
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={18} />
+            <span>Listing {isEditMode ? 'updated' : 'created'} successfully!</span>
+          </div>
+        );
+        dispatch(resetForm());
+        navigate('/admin/auctions');
+      } catch (err) {
+        toast.dismiss(toastId);
+        toast.error(
+          <div className="flex items-center gap-2">
+            <AlertCircle size={18} />
+            <span>{err.message || `Failed to ${isEditMode ? 'update' : 'create'} listing`}</span>
+          </div>
+        );
       }
-
-      toast.dismiss(toastId);
-      toast.success(
-        <div className="flex items-center gap-2">
-          <CheckCircle2 size={18} />
-          <span>Listing {isEditMode ? 'updated' : 'created'} successfully!</span>
-        </div>
-      );
-      dispatch(resetForm());
+    } else {
+      // If in edit mode but no changes, just navigate back
       navigate('/admin/auctions');
-    } catch (err) {
-      toast.dismiss(toastId);
-      toast.error(
-        <div className="flex items-center gap-2">
-          <AlertCircle size={18} />
-          <span>{err.message || `Failed to ${isEditMode ? 'update' : 'create'} listing`}</span>
-        </div>
-      );
     }
   };
 
@@ -730,15 +766,5 @@ const AdminAddListingForm = () => {
           </button>
           <button
             type="submit"
-            disabled={!isValid}
-            className={`px-6 py-2 ${isValid ? 'bg-black hover:bg-gray-900' : 'bg-gray-500 cursor-not-allowed'} text-white rounded shadow-sm`}
-          >
-            {isEditMode ? 'Save changes' : 'Add listing'}
-          </button>
-        </div>
-      </form>
-    </>
-  );
-};
-
-export default AdminAddListingForm;
+            disabled={isEditMode ? Object.keys(errors).length > 0 : !isValid}
+            className={`px-6 py-2 ${(isEditMode && Object.keys(errors).length === 0) || (!isEditMode && isVali
