@@ -91,7 +91,7 @@ const listingSchema = Joi.object({
   images: Joi.array().min(3).messages({
     'array.min': 'At least 3 images are required'
   })
-});
+}).unknown(true);
 
 const AdminAddListingForm = () => {
   const { listingId } = useParams();
@@ -429,6 +429,8 @@ const AdminAddListingForm = () => {
       navigate('/admin/auctions');
     }
   };
+
+  
 
   return (
     <>
