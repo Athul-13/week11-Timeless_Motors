@@ -767,4 +767,18 @@ const AdminAddListingForm = () => {
           <button
             type="submit"
             disabled={isEditMode ? Object.keys(errors).length > 0 : !isValid}
-            className={`px-6 py-2 ${(isEditMode && Object.keys(errors).length === 0) || (!isEditMode && isVali
+            className={`px-6 py-2 ${(isEditMode && Object.keys(errors).length === 0) || (!isEditMode && isValid) ? 'bg-black hover:bg-gray-900' : 'bg-gray-500 cursor-not-allowed'} text-white rounded shadow-sm`}
+          // <button
+          //   type="submit"
+          //   disabled={!isValid}
+          //   className={`px-6 py-2 ${isValid ? 'bg-black hover:bg-gray-900' : 'bg-gray-500 cursor-not-allowed'} text-white rounded shadow-sm`}
+          >
+            {isEditMode ? 'Save changes' : 'Add listing'}
+          </button>
+        </div>
+      </form>
+    </>
+  );
+};
+
+export default AdminAddListingForm;
