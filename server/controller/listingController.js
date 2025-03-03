@@ -86,11 +86,11 @@ exports.addListing = async (req, res) => {
 
         // Add auction-specific fields only if type is auction
         if (type === 'Auction') {
-            listingData.minimum_increment = minimum_increment;
-            listingData.start_date = start_date;
-            listingData.end_date = end_date;
-        }
-
+          listingData.minimum_increment = minimum_increment;
+          listingData.start_date = new Date(start_date).toISOString(); 
+          listingData.end_date = new Date(end_date).toISOString(); 
+      }
+      
         const newListing = new Listing(listingData);
         await newListing.save();
 
