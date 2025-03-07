@@ -8,7 +8,7 @@ const initializeSocket = () => {
         throw new Error('No authentication token found');
     }
     
-    const socket = io( "https://3.108.55.55:5000", {
+    const socket = io( "https://3.108.55.55", {
         withCredentials: true,
         auth: {
             token
