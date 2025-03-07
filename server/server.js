@@ -179,9 +179,9 @@ process.on('SIGTERM', async () => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, async () => {
+server.listen(PORT, "0.0.0.0", async () => {
   try {
-    console.log(`Server is running on port: http://localhost:${PORT}`);
+    console.log(`Server is running on port: http://0.0.0.0:${PORT}`);
     
     // Process existing auctions and payments
     console.log('Processing existing auctions and payments...');
