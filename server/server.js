@@ -30,7 +30,7 @@ connectDB();
 
 app.use(
   cors({
-    origin: ["https://week11-timeless-motors.vercel.app", "http://localhost:5173"],
+    origin: ["https://week11-timeless-motors.vercel.app", "http://localhost:5173", "https://app.timeless-motors.live"],
     credentials: true,
   })
 );
