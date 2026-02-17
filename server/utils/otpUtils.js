@@ -1,12 +1,8 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: 'ak6474100857@gmail.com',
-        pass: 'tpgi oqei kaiy njog'
-    }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const FROM_EMAIL = process.env.FROM_EMAIL || 'onboarding@resend.dev';
 
 module.exports = {
     generateOTP: (length) => {
@@ -19,23 +15,26 @@ module.exports = {
     },
     sendOTP: async (email, otp) => {
         try {
-            const mailOptions = {
-                from: 'ak6474100857@gmail.com', 
+            const { data, error } = await resend.emails.send({
+                from: FROM_EMAIL,
                 to: email,
                 subject: 'Your Timeless Motors Verification Code',
                 html: `
                     <h1>Welcome to Timeless Motors!</h1>
                     <p>Your verification code is: <b>${otp}</b></p>
                     <p>This code will expire in 1 minute.</p> 
-                ` 
-            };
+                `
+            });
 
-            const info = await transporter.sendMail(mailOptions);
-            console.log('OTP email sent:', info.response);
+            if (error) {
+                console.error('Error sending OTP email:', error);
+                throw error;
+            }
 
+            console.log('OTP email sent:', data?.id);
         } catch (error) {
             console.error('Error sending OTP email:', error);
-            throw error; 
+            throw error;
         }
     }
-}
+};
