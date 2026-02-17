@@ -209,6 +209,7 @@ const SignupForm = () => {
                   id="phone_no"
                   placeholder="Phone number*"
                   className={`w-full px-4 py-2 border border-gray-500 rounded focus:outline-none focus:ring-2 focus:ring-gray-800`}
+                  {...register("phone_no")}
                 />
                 <ValidationIndicator field="phone_no" />
                 {errors.phone_no && (
