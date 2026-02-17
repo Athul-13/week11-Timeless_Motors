@@ -195,17 +195,17 @@ exports.login = async (req, res) => {
 
         const user = await User.findOne({email});
 
+        if (!user || !(await user.matchPassword(password))) {
+            await logActivity(user?._id || "Unknown", "Failed Login Attempt", `Failed login attempt for email: ${email}`, req);
+            return res.status(401).json({message: 'Invalid email or password'});
+        }
+
         if (user.status === 'inactive') {
             await logActivity(user._id, "Blocked Login Attempt", "Blocked user tried to log in", req);
             return res.status(403).json({
                 message: 'User has been blocked from logging in',
-                showToast: true, 
+                showToast: true,
             });
-        }
-
-        if(!user || !(await user.matchPassword(password))) {
-            await logActivity(user?._id || "Unknown", "Failed Login Attempt", `Failed login attempt for email: ${email}`, req);
-            return res.status(401).json({message: 'Invalid email or password'});
         }
 
         const accessToken = generateAccessToken(user._id, user.role);
