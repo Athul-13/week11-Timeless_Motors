@@ -7,10 +7,19 @@ import Footer from '../../components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
 import { fetchCart, removeFromCart } from '../../redux/cartSlice';
 import AddressManager from './AddressManager';
-import { orderService, walletService } from '../../utils/api';
+import { orderService, walletService, profileServices } from '../../utils/api';
 import RazorpayCheckout from '../../components/RazorpayCheckout';
+import { updateUser } from '../../redux/authSlice';
 
-const CartSummary = ({ subtotal, tax, total, onCheckout }) => (
+const CartSummary = ({
+  subtotal,
+  tax,
+  total,
+  onCheckout,
+  isVerified,
+  statusLoading,
+  onGoToProfile,
+}) => (
   <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6">
     <h3 className="text-lg font-semibold text-gray-800 mb-4">Order Summary</h3>
     <div className="space-y-3">
@@ -27,12 +36,36 @@ const CartSummary = ({ subtotal, tax, total, onCheckout }) => (
         <span className="text-gray-800">Total</span>
         <span className="text-gray-800">₹ {total.toLocaleString()}</span>
       </div>
+
+      {statusLoading && (
+        <p className="text-sm text-gray-500 mt-4">Checking account verification…</p>
+      )}
+
+      {!statusLoading && !isVerified && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-medium">Verification required</p>
+          <p className="mt-1 text-amber-800">
+            Complete KYC verification before you can place an order.
+          </p>
+          <button
+            type="button"
+            onClick={onGoToProfile}
+            className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-800"
+          >
+            Go to profile & KYC
+          </button>
+        </div>
+      )}
+
       <button
+        type="button"
         onClick={onCheckout}
+        disabled={statusLoading || !isVerified}
         className="w-full mt-6 bg-indigo-600 text-white py-3 rounded-lg font-medium
-                 hover:bg-indigo-700 transition-colors duration-300"
+                 hover:bg-indigo-700 transition-colors duration-300
+                 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-indigo-600"
       >
-        Place order
+        {statusLoading ? 'Please wait…' : 'Place order'}
       </button>
     </div>
   </div>
@@ -207,7 +240,8 @@ const Checkout = () => {
   const location = useLocation()
   const selectedItemId = location.state?.selectedItemId;
   const { items, loading } = useSelector((state) => state.cart);
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
+  const [statusCheckLoading, setStatusCheckLoading] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [showAddressManager, setShowAddressManager] = useState(true);
@@ -242,6 +276,38 @@ const Checkout = () => {
       navigate('/login');
     }
   }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const profile = await profileServices.getProfile();
+        if (!cancelled) {
+          dispatch(
+            updateUser({
+              status: profile.status,
+              ...(profile.profile_picture && {
+                profilePicture: profile.profile_picture,
+              }),
+            })
+          );
+        }
+      } catch (e) {
+        console.error('Checkout: failed to refresh profile', e);
+        toast.error('Could not load account status. Refresh the page or try again.');
+      } finally {
+        if (!cancelled) setStatusCheckLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, dispatch]);
+
+  const isVerified = user?.status === 'verified';
 
   const handleAddressSelection = (address) => {
     setSelectedAddress(address);
@@ -292,11 +358,35 @@ const Checkout = () => {
       return;
     }
 
+    try {
+      const profile = await profileServices.getProfile();
+      dispatch(
+        updateUser({
+          status: profile.status,
+          ...(profile.profile_picture && {
+            profilePicture: profile.profile_picture,
+          }),
+        })
+      );
+      if (profile.status !== 'verified') {
+        toast.error(
+          'Complete KYC verification before placing an order. You can submit documents from your profile.'
+        );
+        return;
+      }
+    } catch (e) {
+      console.error('Place order: profile check failed', e);
+      toast.error('Could not verify your account. Please try again.');
+      return;
+    }
+
     const productCheck = await orderService.checkProductAvailability(selectedItemId);
     if (!productCheck || productCheck.status === 'sold') {
       toast.error('Sorry, this item is no longer available.');
       return;
     }
+
+    
     
     try {
       const item = items.find(cartItem => 
@@ -529,13 +619,21 @@ const Checkout = () => {
             <div className="lg:col-span-1">
               <CartSummary
                 {...calculateTotals()}
+                isVerified={isVerified}
+                statusLoading={statusCheckLoading}
+                onGoToProfile={() => navigate('/profile/profileDetails')}
                 onCheckout={() => {
                   if (!selectedAddress) {
-                    toast.error('Please select a delivery address')
+                    toast.error('Please select a delivery address');
                     return;
                   }
                   if (!selectedPaymentMethod) {
-                    toast.error('Please select a payment method')
+                    toast.error('Please select a payment method');
+                    return;
+                  }
+                  if (!statusCheckLoading && user?.status !== 'verified') {
+                    toast.error('Complete KYC verification before placing an order.');
+                    return;
                   }
                   handlePlaceOrder();
                 }}

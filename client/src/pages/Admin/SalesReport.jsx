@@ -197,7 +197,7 @@ const DownloadButton = ({
         toast.success(summaryMessage);
   
         // Open PDF in new tab
-        window.open(`https://timeless-motors.onrender.com${pdfUrl}`, '_blank');
+        window.open(`https://week11-timeless-motors.onrender.com${pdfUrl}`, '_blank');
   
       } catch (error) {
         console.error('Error generating report:', error);
@@ -271,7 +271,7 @@ const DownloadButton = ({
         toast.success(summaryMessage);
   
         // Open PDF in new tab
-        window.open(`https://timeless-motors.onrender.com${excelUrl}`, '_blank');
+        window.open(`https://week11-timeless-motors.onrender.com${excelUrl}`, '_blank');
   
       } catch (error) {
         console.error('Error generating report:', error);
@@ -321,7 +321,7 @@ const DownloadButton = ({
         const { invoiceUrl, orderNumber } = response
   
           toast.success(`Invoice generated for order ${orderNumber}`);
-          window.open(`https://timeless-motors.onrender.com${invoiceUrl}`, '_blank');
+          window.open(`https://week11-timeless-motors.onrender.com${invoiceUrl}`, '_blank');
 
       } catch (error) {
         console.error('Error generating invoice:', error);
